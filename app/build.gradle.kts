@@ -10,6 +10,7 @@ android {
     defaultConfig {
         applicationId = "com.example.myapplication"
         minSdk = 24
+
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -50,6 +51,22 @@ android {
 }
 
 dependencies {
+
+    // Основные зависимости для Jetpack Compose
+    implementation("androidx.compose.ui:ui:1.7.5") // Замените версию на последнюю
+    implementation("androidx.compose.material3:material3:1.3.1")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.7.5")
+    implementation("androidx.compose.runtime:runtime:1.7.5")
+
+    // Зависимость для ConstraintLayout в Compose
+    implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
+
+    // Для отображения превью
+    debugImplementation("androidx.compose.ui:ui-tooling:1.7.5")
+
+    //noinspection UseTomlInstead
+    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
+
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
