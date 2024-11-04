@@ -3,27 +3,38 @@ package com.example.myapplication
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.myapplication.ui.theme.MyApplicationTheme
 import androidx.constraintlayout.compose.ConstraintLayout
-import androidx.compose.material3.Button as Button
+import androidx.compose.ui.viewinterop.AndroidView
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import com.example.myapplication.ui.theme.MyApplicationTheme
+
+val LightBlue = Color(0xFFADD8E6)
+val Beige = Color(0xFFF5F5DC)
+val DarkBlue = Color(225, 202, 230)
+val Sand = Color(0xFFFFE4B5)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MainScreen(modifier = Modifier.padding(innerPadding))
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = LightBlue // Фон всего экрана
+                ) { innerPadding ->
+                    AppContent(modifier = Modifier.padding(innerPadding))
                 }
             }
         }
@@ -31,62 +42,97 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(modifier: Modifier = Modifier) {
-    ConstraintLayout(modifier = modifier.fillMaxSize()) {
-        // Создаем ссылки для кнопок
+fun AppContent(modifier: Modifier = Modifier) {
+    var showMap by remember { mutableStateOf(false) }
+
+    if (showMap) {
+        MapScreen(modifier = modifier)
+    } else {
+        ButtonInterface(onButtonClick = { showMap = true }, modifier = modifier)
+    }
+}
+
+@Composable
+fun ButtonInterface(onButtonClick: () -> Unit, modifier: Modifier = Modifier) {
+    ConstraintLayout(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Beige)
+    ) {
         val (button1, button2, button3, button4) = createRefs()
 
         Button(
-            onClick = { /* Действие для кнопки 1 */ },
-            modifier = Modifier.constrainAs(button1) {
-                top.linkTo(parent.top, margin = 8.dp)
-                start.linkTo(parent.start)
-                end.linkTo(parent.end)
-            }
+            onClick = onButtonClick,
+            modifier = Modifier
+                .background(Sand)
+                .constrainAs(button1) {
+                    bottom.linkTo(button2.top, margin = 8.dp)
+                    start.linkTo(parent.start)
+                    end.linkTo(parent.end)
+                }
         ) {
-            Text("Кнопка 1")
+            Text("Кнопка 1", color = DarkBlue)
         }
 
         Button(
             onClick = { /* Действие для кнопки 2 */ },
-            modifier = Modifier.constrainAs(button2) {
-                top.linkTo(button1.bottom, margin = 8.dp)
-                start.linkTo(parent.start)
-                end.linkTo(parent.end)
-            }
+            modifier = Modifier
+                .background(Sand)
+                .constrainAs(button2) {
+                    bottom.linkTo(button3.top, margin = 8.dp)
+                    start.linkTo(parent.start)
+                    end.linkTo(parent.end)
+                }
         ) {
-            Text("Кнопка 2")
+            Text("Кнопка 2", color = DarkBlue)
         }
 
         Button(
             onClick = { /* Действие для кнопки 3 */ },
-            modifier = Modifier.constrainAs(button3) {
-                top.linkTo(button2.bottom, margin = 8.dp)
-                start.linkTo(parent.start)
-                end.linkTo(parent.end)
-            }
+            modifier = Modifier
+                .background(Sand)
+                .constrainAs(button3) {
+                    bottom.linkTo(button4.top, margin = 8.dp)
+                    start.linkTo(parent.start)
+                    end.linkTo(parent.end)
+                }
         ) {
-            Text("Кнопка 3")
+            Text("Кнопка 3", color = DarkBlue)
         }
 
         Button(
             onClick = { /* Действие для кнопки 4 */ },
-            modifier = Modifier.constrainAs(button4) {
-                top.linkTo(button3.bottom, margin = 8.dp)
-                start.linkTo(parent.start)
-                end.linkTo(parent.end)
-                bottom.linkTo(parent.bottom, margin = 8.dp)
-            }
+            modifier = Modifier
+                .background(Sand)
+                .constrainAs(button4) {
+                    bottom.linkTo(parent.bottom, margin = 8.dp)
+                    start.linkTo(parent.start)
+                    end.linkTo(parent.end)
+                }
         ) {
-            Text("Кнопка 4")
+            Text("Кнопка 4", color = DarkBlue)
         }
     }
 }
 
+@Composable
+fun MapScreen(modifier: Modifier = Modifier) {
+    AndroidView(
+        factory = { context ->
+            MapView(context).apply {
+                controller.setZoom(15.0)
+                controller.setCenter(GeoPoint(48.659167, 35.045556))
+                setMultiTouchControls(true)
+            }
+        },
+        modifier = modifier.fillMaxSize()
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
-fun MainScreenPreview() {
+fun AppContentPreview() {
     MyApplicationTheme {
-        MainScreen()
+        AppContent()
     }
 }

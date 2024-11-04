@@ -58,6 +58,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.5")
     implementation("androidx.compose.runtime:runtime:1.7.5")
 
+    implementation ("org.osmdroid:osmdroid-android:6.1.11")
+
     // Зависимость для ConstraintLayout в Compose
     implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
 
