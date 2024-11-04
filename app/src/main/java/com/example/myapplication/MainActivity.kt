@@ -28,18 +28,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import org.osmdroid.views.overlay.Marker
-
-
+import android.util.Log
+import android.widget.Toast
 
 val LightBlue = Color(0xFFADD8E6)
-val Beige = Color(0xFFF5F5DC)
-val DarkBlue = Color(0xFF0057A0)
-val Sand = Color(0xFFFFE4B5)
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -63,26 +59,48 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 @Composable
 fun AppContent(modifier: Modifier = Modifier, fusedLocationClient: FusedLocationProviderClient) {
     var showMap by remember { mutableStateOf(false) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
     val context = LocalContext.current
 
+    // Логгер для отладки
+    val TAG = "LocationPermissionCheck"
+
     // Запрос разрешения на геолокацию
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    userLocation = GeoPoint(location.latitude, location.longitude)
+            // Если разрешение получено, пробуем получить местоположение
+            val TAG2 = "MainActivity"  // Убедитесь, что у вас есть объявление этого тега в коде
+
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { location ->
+                    if (location != null) {
+                        userLocation = GeoPoint(location.latitude, location.longitude)
+                        Log.d(TAG2, "Местоположение получено: ${location.latitude}, ${location.longitude}")
+                        Toast.makeText(context, "Местоположение: ${location.latitude}, ${location.longitude}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Log.e(TAG2, "Не удалось получить местоположение — объект location пустой")
+                        Toast.makeText(context, "Ошибка: не удалось получить местоположение", Toast.LENGTH_SHORT).show()
+                    }
                 }
-                showMap = true
-            }
+                .addOnFailureListener { exception ->
+                    Log.e(TAG2, "Ошибка получения местоположения: ${exception.message}")
+                    Toast.makeText(context, "Ошибка получения местоположения: ${exception.message}", Toast.LENGTH_SHORT).show()
+                }
+
+
+        } else {
+            Log.w(TAG, "Разрешение на доступ к местоположению отклонено")
+            Toast.makeText(context, "Разрешение на доступ к местоположению отклонено", Toast.LENGTH_SHORT).show()
         }
     }
 
+    // Проверка разрешения при нажатии на кнопку "Начать"
     if (showMap) {
         MapScreen(modifier = modifier, userLocation = userLocation)
     } else {
@@ -92,19 +110,27 @@ fun AppContent(modifier: Modifier = Modifier, fusedLocationClient: FusedLocation
                     Manifest.permission.ACCESS_FINE_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
+                // Разрешение уже получено
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         userLocation = GeoPoint(location.latitude, location.longitude)
+                        Log.d(TAG, "Местоположение получено: ${location.latitude}, ${location.longitude}")
+                    } else {
+                        Log.e(TAG, "Не удалось получить местоположение")
+                        Toast.makeText(context, "Не удалось получить местоположение", Toast.LENGTH_SHORT).show()
                     }
                     showMap = true
+                }.addOnFailureListener { exception ->
+                    Log.e(TAG, "Ошибка получения местоположения: ${exception.message}")
+                    Toast.makeText(context, "Ошибка: ${exception.message}", Toast.LENGTH_SHORT).show()
                 }
             } else {
+                // Запрашиваем разрешение
                 locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             }
         }, modifier = modifier)
     }
 }
-
 
 @Composable
 fun ButtonInterface(onButtonClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -206,6 +232,7 @@ fun MapScreen(modifier: Modifier = Modifier, userLocation: GeoPoint?) {
 }
 
 @Preview(showBackground = true)
+
 @Composable
 fun AppContentPreview() {
     val context = LocalContext.current
