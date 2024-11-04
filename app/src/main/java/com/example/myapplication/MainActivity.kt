@@ -22,7 +22,7 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 
 val LightBlue = Color(0xFFADD8E6)
 val Beige = Color(0xFFF5F5DC)
-val DarkBlue = Color(225, 202, 230)
+val DarkBlue = Color(0xFF0057A0)
 val Sand = Color(0xFFFFE4B5)
 
 class MainActivity : ComponentActivity() {
