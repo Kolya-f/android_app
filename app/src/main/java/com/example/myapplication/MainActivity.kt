@@ -34,19 +34,50 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import com.example.myapplication.ui.theme.MyApplicationTheme
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import java.io.File
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.Network
+
+
 
 val LightBlue = Color(0xFFADD8E6)
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var connectivityManager: ConnectivityManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Временно укажите ID вашего приложения напрямую
-        Configuration.getInstance().userAgentValue = "com.example.myapplication" // замените на ваш applicationId
+        // Устанавливаем userAgentValue и пути для кэша osmdroid
+        Configuration.getInstance().apply {
+            userAgentValue = packageName
+            osmdroidBasePath = File(getExternalFilesDir(null), "osmdroid")
+            osmdroidTileCache = File(osmdroidBasePath, "tiles")
+        }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        // Инициализируем ConnectivityManager и отслеживаем состояние сети
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        val networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                updateNetworkStatus(true)
+            }
+
+            override fun onLost(network: Network) {
+                updateNetworkStatus(false)
+            }
+        }
+
+        // Регистрируем NetworkCallback для отслеживания изменений сети
+        connectivityManager.registerDefaultNetworkCallback(networkCallback)
 
         setContent {
             MyApplicationTheme {
@@ -62,8 +93,33 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // Отменяем регистрацию networkCallback при уничтожении активности
+        connectivityManager.unregisterNetworkCallback(ConnectivityManager.NetworkCallback())
+    }
+
+    // Метод для обновления состояния сети
+    private fun updateNetworkStatus(isConnected: Boolean) {
+        Configuration.getInstance().apply {
+            // Переключаем режим в зависимости от состояния сети
+            load(this@MainActivity, getSharedPreferences("osmdroid", MODE_PRIVATE))
+            isMapViewHardwareAccelerated = true
+        }
+        runOnUiThread {
+            Toast.makeText(this, if (isConnected) "Режим онлайн" else "Режим оффлайн", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Проверка доступности интернета (используется при инициализации)
+    private fun isInternetAvailable(context: Context): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+    }
+}
 
 @Composable
 fun AppContent(modifier: Modifier = Modifier, fusedLocationClient: FusedLocationProviderClient) {
@@ -85,7 +141,7 @@ fun AppContent(modifier: Modifier = Modifier, fusedLocationClient: FusedLocation
     }
 
     if (showMap) {
-        MapScreen(modifier = modifier, userLocation = userLocation)
+        MapScreen_Backend(modifier = modifier, userLocation = userLocation)
     } else {
         ButtonInterface(onButtonClick = {
             if (ActivityCompat.checkSelfPermission(
@@ -103,10 +159,10 @@ fun AppContent(modifier: Modifier = Modifier, fusedLocationClient: FusedLocation
         }, modifier = modifier)
     }
 }
-
+// Функция для получения местоположения
 private fun getUserLocation(
     fusedLocationClient: FusedLocationProviderClient,
-    context: android.content.Context,
+    context: Context,
     onLocationReceived: (GeoPoint?) -> Unit
 ) {
     if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -118,8 +174,7 @@ private fun getUserLocation(
     fusedLocationClient.lastLocation
         .addOnSuccessListener { location ->
             if (location != null) {
-                val geoPoint = GeoPoint(location.latitude, location.longitude)
-                onLocationReceived(geoPoint)
+                onLocationReceived(GeoPoint(location.latitude, location.longitude))
             } else {
                 Toast.makeText(context, "Ошибка: не удалось получить местоположение", Toast.LENGTH_SHORT).show()
                 onLocationReceived(null)
@@ -130,6 +185,8 @@ private fun getUserLocation(
             onLocationReceived(null)
         }
 }
+
+
 
 @Composable
 fun ButtonInterface(onButtonClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -164,26 +221,46 @@ fun ButtonInterface(onButtonClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MapScreen(modifier: Modifier = Modifier, userLocation: GeoPoint?) {
+fun MapScreen_Backend(modifier: Modifier = Modifier, userLocation: GeoPoint?) {
     AndroidView(
         factory = { context ->
             MapView(context).apply {
                 controller.setZoom(15.0)
                 setMultiTouchControls(true)
-                if (userLocation != null) {
-                    controller.setCenter(userLocation)
 
-                    val marker = Marker(this)
-                    marker.position = userLocation
-                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    marker.title = "Вы здесь"
-                    overlays.add(marker)
+                // Используем post, чтобы изменения применялись после полной инициализации
+                post {
+                    if (userLocation != null) {
+                        // Проверяем и задаем центр на местоположение пользователя
+                        controller.setCenter(userLocation)
+                        val marker = Marker(this).apply {
+                            position = userLocation
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            title = "Вы здесь"
+                        }
+                        overlays.add(marker)
+                    } else {
+                        // Координаты центра Днепра, Украина (широта и долгота)
+                        val defaultLocation = GeoPoint(48.4647, 35.0462)
+                        controller.setCenter(defaultLocation)
+
+                        val marker = Marker(this).apply {
+                            position = defaultLocation
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            title = "Днепр, Украина (по умолчанию)"
+                        }
+                        overlays.add(marker)
+                    }
+
+                    // Обновляем карту принудительно
+                    invalidate()
                 }
             }
         },
         modifier = modifier.fillMaxSize()
     )
 }
+
 
 @Preview(showBackground = true)
 @Composable
