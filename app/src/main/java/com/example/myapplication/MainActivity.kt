@@ -2,7 +2,6 @@ package com.example.myapplication
 
 import android.location.LocationManager
 import android.Manifest
-import androidx.preference.PreferenceManager
 import android.util.Log
 import android.os.Looper
 import android.content.pm.PackageManager
@@ -147,7 +146,7 @@ class MainActivity : ComponentActivity() {
     // Запускает регулярные обновления местоположения
     private fun startLocationUpdates() {
         val locationRequest = com.google.android.gms.location.LocationRequest.create().apply {
-            interval = 10000 // Интервал между обновлениями, в миллисекундах
+            interval = 6000 // Интервал между обновлениями, в миллисекундах
             fastestInterval = 5000
             priority = com.google.android.gms.location.LocationRequest.PRIORITY_HIGH_ACCURACY
         }
