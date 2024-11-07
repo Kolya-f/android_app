@@ -11,6 +11,7 @@ android {
         applicationId = "com.example.myapplication"
         minSdk = 24
 
+        //noinspection OldTargetApi
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -64,7 +65,7 @@ dependencies {
 
     // Зависимость для ConstraintLayout в Compose
     implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
-        //////
+    //////
     implementation ("com.google.android.gms:play-services-location:21.3.0")
 
     // Для отображения превью

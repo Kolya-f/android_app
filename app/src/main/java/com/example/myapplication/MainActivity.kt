@@ -169,7 +169,6 @@ class MainActivity : ComponentActivity() {
 }
 
 
-
 // Проверка, включены ли службы местоположения на устройстве
 fun isLocationServiceEnabled(context: Context): Boolean {
     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -187,15 +186,28 @@ fun AppContent(
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
     val context = LocalContext.current
 
-    // Проверка, включены ли службы местоположения и есть ли разрешения
-    val isLocationPermissionGranted = ActivityCompat.checkSelfPermission(
-        context,
-        Manifest.permission.ACCESS_FINE_LOCATION
-    ) == PackageManager.PERMISSION_GRANTED
+    // Проверка разрешения и состояния служб местоположения
+    var isLocationEnabled by remember {
+        mutableStateOf(
+            ActivityCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(context)
+        )
+    }
 
-    val isLocationServiceEnabled = isLocationServiceEnabled(context)
-    val isLocationEnabled = isLocationPermissionGranted && isLocationServiceEnabled
+    // Обновляем isLocationEnabled, когда изменяется состояние служб местоположения
+    LaunchedEffect(Unit) {
+        // Этот код будет выполняться только при изменении служб местоположения
+        while (true) {
+            val currentLocationEnabled = isLocationServiceEnabled(context)
+            if (isLocationEnabled != currentLocationEnabled) {
+                isLocationEnabled = currentLocationEnabled
+            }
+            kotlinx.coroutines.delay(1000L) // Проверка каждые 1 секунду
+        }
+    }
 
+    // Проверяем разрешение на доступ к местоположению и, если оно есть, получаем координаты
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -209,20 +221,23 @@ fun AppContent(
         }
     }
 
+    // Функция, которая будет запускаться при нажатии на кнопку
+    val onButtonClick: () -> Unit = {
+        if (isLocationEnabled) {
+            getUserLocation(fusedLocationClient, context) { location ->
+                userLocation = location
+                showMap = true
+            }
+        } else {
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
     if (showMap) {
         MapScreen_Backend(modifier = modifier, userLocation = userLocation)
     } else {
         ButtonInterface(
-            onButtonClick = {
-                if (isLocationEnabled) {
-                    getUserLocation(fusedLocationClient, context) { location ->
-                        userLocation = location
-                        showMap = true
-                    }
-                } else {
-                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                }
-            },
+            onButtonClick = onButtonClick,
             isLocationEnabled = isLocationEnabled,
             isInternetEnabled = isInternetEnabled,
             modifier = modifier
@@ -256,6 +271,7 @@ private fun getUserLocation(
             onLocationReceived(null)
         }
 }
+
 
 @Composable
 fun ButtonInterface(
