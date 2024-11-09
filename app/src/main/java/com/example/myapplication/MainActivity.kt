@@ -57,7 +57,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
 import com.google.android.gms.location.LocationRequest
 import com.google.firebase.FirebaseApp
-import com.google.firebase.firestore.ktx.firestore
+
 
 private var isNetworkCallbackRegistered = false
 
