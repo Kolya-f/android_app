@@ -54,6 +54,24 @@ android {
 }
 
 dependencies {
+
+    implementation("androidx.activity:activity-compose:1.5.1")
+    implementation("androidx.compose.ui:ui:1.2.0")
+    implementation("androidx.compose.material3:material3:1.0.0")
+    implementation("androidx.compose.runtime:runtime-livedata:1.2.0")
+    implementation("androidx.constraintlayout:constraintlayout-compose:1.0.1")
+
+    // Firebase
+    implementation("com.google.firebase:firebase-firestore-ktx:24.0.0")
+    implementation("com.google.firebase:firebase-analytics-ktx:21.0.0")
+
+    // OSMDroid для карт
+    implementation("org.osmdroid:osmdroid-android:6.1.11")
+    implementation("org.osmdroid:osmdroid-mapsforge:6.1.11")
+
+    // Google Play Services для местоположения
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
     // Firebase Firestore
     implementation("com.google.firebase:firebase-analytics-ktx")
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))

@@ -57,19 +57,23 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
 import com.google.android.gms.location.LocationRequest
 import com.google.firebase.FirebaseApp
+import com.google.firebase.firestore.ktx.firestore
+import android.provider.Settings
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 
-
-private var isNetworkCallbackRegistered = false
+//private var isNetworkCallbackRegistered = false
 
 val LightBlue = Color(0xFFADD8E6)
 
 
 class MainActivity : ComponentActivity() {
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private var isInternetEnabled by mutableStateOf(false)
     private val db: FirebaseFirestore = Firebase.firestore
+    private lateinit var mapView: MapView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,33 +81,16 @@ class MainActivity : ComponentActivity() {
         // Инициализация Firebase
         FirebaseApp.initializeApp(this)
 
-        // Проверка инициализации Firebase Firestore
-        val db: FirebaseFirestore? = try {
-            Firebase.firestore
-        } catch (e: Exception) {
-            null
-        }
-
-        if (db != null) {
-            // Успешная инициализация Firestore
-            Toast.makeText(this, "Firestore инициализирован", Toast.LENGTH_SHORT).show()
-        } else {
-            // Ошибка инициализации Firestore
-            Toast.makeText(this, "Ошибка инициализации Firestore", Toast.LENGTH_LONG).show()
-        }
-
-        // Настройка osmdroid
-        Configuration.getInstance().apply {
-            userAgentValue = packageName
-            osmdroidBasePath = File(getExternalFilesDir(null), "osmdroid")
-            osmdroidTileCache = File(osmdroidBasePath, "tiles")
-        }
-
-        // Инициализация клиента для получения местоположения
+        // Инициализация клиента для получения местоположения перед его использованием
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-        // Регистрация сетевого callback
+        // Инициализация карты
+        mapView = MapView(this).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+        }
+
+        // Настройка сетевого подключения
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 updateNetworkStatus(true)
@@ -114,12 +101,17 @@ class MainActivity : ComponentActivity() {
             }
         }
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
-        isNetworkCallbackRegistered = true // Обновляем флаг
+        isNetworkCallbackRegistered = true
 
-        // Начало отслеживания местоположения, если разрешение уже предоставлено
+        // Проверка разрешения на доступ к местоположению
         if (checkLocationPermission()) {
-            startLocationUpdates()
+            startLocationUpdates()  // Запуск после полной инициализации
+        } else {
+            requestLocationPermission()
         }
+
+        // Загрузка всех местоположений из Firestore и добавление на карту
+        loadAllLocationsFromFirestore()
 
         // Установка Compose UI
         setContent {
@@ -128,11 +120,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     containerColor = LightBlue
                 ) { innerPadding ->
-                    AppContent(
-                        modifier = Modifier.padding(innerPadding),
-                        fusedLocationClient = fusedLocationClient,
-                        isInternetEnabled = isInternetEnabled
-                    )
+                    AndroidView(factory = { mapView }, modifier = Modifier.padding(innerPadding))
                 }
             }
         }
@@ -146,33 +134,46 @@ class MainActivity : ComponentActivity() {
         Configuration.getInstance().load(this, androidx.preference.PreferenceManager.getDefaultSharedPreferences(this))
         Configuration.getInstance().isMapViewHardwareAccelerated = true
 
-        // Показуємо повідомлення користувачу про зміну статусу мережі
         runOnUiThread {
             Toast.makeText(this, if (isConnected) "Режим онлайн" else "Режим оффлайн", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Перевірка дозволу на доступ до місцезнаходження
     private fun checkLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Початок оновлень місцезнаходження
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                startLocationUpdates()
+            } else {
+                Toast.makeText(this, "Доступ к местоположению необходим для работы приложения", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
         val locationRequest = LocationRequest.create().apply {
-            interval = 6000L // Інтервал між оновленнями в мілісекундах
+            interval = 6000L
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
         if (checkLocationPermission()) {
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+        } else {
+            requestLocationPermission()
         }
     }
 
-    // Відправка місцезнаходження в Firestore
     private fun sendLocationToFirestore() {
         if (checkLocationPermission()) {
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
@@ -183,9 +184,10 @@ class MainActivity : ComponentActivity() {
                         "timestamp" to System.currentTimeMillis()
                     )
 
-                    // Відправка даних у Firestore
+                    val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+
                     db.collection("locations")
-                        .document("device_id") // Унікальний ідентифікатор пристрою або користувача
+                        .document(deviceId)
                         .set(locationData)
                         .addOnSuccessListener {
                             Log.d("Firestore", "Дані про місцезнаходження успішно відправлені")
@@ -198,23 +200,80 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Callback для оновлення місцезнаходження
     private val locationCallback = object : com.google.android.gms.location.LocationCallback() {
         override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
             val location = locationResult.lastLocation
             if (location != null) {
                 val geoPoint = GeoPoint(location.latitude, location.longitude)
                 Log.d("Location", "Оновлене місцезнаходження: $geoPoint")
-                // Можна оновити стан карти або UI, передаючи нове місцезнаходження
+                sendLocationToFirestore()
             }
         }
+    }
+
+    private fun loadAllLocationsFromFirestore() {
+        db.collection("locations")
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("Firestore", "Listen failed.", e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshots != null) {
+                    mapView.overlays.clear()
+
+                    for (document in snapshots) {
+                        val latitude = document.getDouble("latitude")
+                        val longitude = document.getDouble("longitude")
+
+                        if (latitude != null && longitude != null) {
+                            val geoPoint = GeoPoint(latitude, longitude)
+                            addMarkerToMap(geoPoint, document.id)
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun addMarkerToMap(geoPoint: GeoPoint, deviceId: String) {
+        val marker = Marker(mapView).apply {
+            position = geoPoint
+            title = "Device: $deviceId"
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        }
+        mapView.overlays.add(marker)
+        mapView.invalidate()
+    }
+
+    private fun requestLocationPermission() {
+        if (!checkLocationPermission()) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        if (isNetworkCallbackRegistered) {
+            try {
+                connectivityManager.unregisterNetworkCallback(networkCallback)
+                isNetworkCallbackRegistered = false
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Ошибка при отмене регистрации NetworkCallback: ", e)
+            }
+        }
+
+        fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
     }
 }
-
 
 
 // Проверка, включены ли службы местоположения на устройстве
