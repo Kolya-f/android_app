@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1823994035",
+    "project_id": "myap-3ab01",
+    "storage_bucket": "myap-3ab01.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1823994035:android:db409398bd3b7364e280c6",
+        "android_client_info": {
+          "package_name": "com.example.myapplication"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVLOjk65PNQEy1hwxXErgJmCseYl2rRW0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
