@@ -1,6 +1,5 @@
 package com.example.myapplication
 
-import android.location.LocationManager
 import android.Manifest
 import android.util.Log
 import android.os.Looper
