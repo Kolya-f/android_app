@@ -52,71 +52,53 @@ android {
         }
     }
 }
-
 dependencies {
+    // Firebase BOM (Bill of Materials) для управления версиями
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
 
-    implementation("androidx.activity:activity-compose:1.5.1")
-    implementation("androidx.compose.ui:ui:1.2.0")
-    implementation("androidx.compose.material3:material3:1.0.0")
-    implementation("androidx.compose.runtime:runtime-livedata:1.2.0")
-    implementation("androidx.constraintlayout:constraintlayout-compose:1.0.1")
+    implementation("com.google.android.gms:play-services-base:18.5.0")
 
-    // Firebase
-    implementation("com.google.firebase:firebase-firestore-ktx:24.0.0")
-    implementation("com.google.firebase:firebase-analytics-ktx:21.0.0")
+
+    // Firebase зависимости
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.google.firebase:firebase-auth-ktx") // Если используется аутентификация
+    implementation("com.google.firebase:firebase-database-ktx") // Если используется Firebase Database
 
     // OSMDroid для карт
     implementation("org.osmdroid:osmdroid-android:6.1.11")
     implementation("org.osmdroid:osmdroid-mapsforge:6.1.11")
 
-    // Google Play Services для местоположения
-    implementation("com.google.android.gms:play-services-location:21.0.1")
+    // Google Play Services для работы с местоположением
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // Firebase Firestore
-    implementation("com.google.firebase:firebase-analytics-ktx")
-    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-    implementation("com.google.firebase:firebase-bom:33.5.1")
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-firestore-ktx:24.3.1")
-    implementation("com.google.firebase:firebase-auth-ktx:22.0.0") // если используется аутентификация
-    implementation("com.google.android.gms:play-services-location:21.3.0") // для работы с местоположением
-    implementation ("com.google.firebase:firebase-firestore")
-
-    // Основные зависимости для Jetpack Compose
-    implementation("androidx.compose.ui:ui:1.7.5") // Замените версию на последнюю
+    // Jetpack Compose зависимости
+    implementation("androidx.activity:activity-compose:1.5.1")
+    implementation("androidx.compose.ui:ui:1.7.5") // Последняя версия
     implementation("androidx.compose.material3:material3:1.3.1")
+    implementation("androidx.compose.runtime:runtime-livedata:1.7.5")
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.5")
-    implementation("androidx.compose.runtime:runtime:1.7.5")
-    implementation ("androidx.preference:preference:1.2.1")
+
+    implementation("com.google.android.gms:play-services-base:18.1.0")
 
 
-    implementation ("org.osmdroid:osmdroid-android:6.1.11")
-
-    // Зависимость для ConstraintLayout в Compose
+    // ConstraintLayout для Compose
     implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
-    //////
-    implementation ("com.google.android.gms:play-services-location:21.3.0")
 
-    // Для отображения превью
+    // Зависимость для работы с настройками
+    implementation("androidx.preference:preference-ktx:1.2.1")
+
+    // Зависимости для отладки и тестирования
     debugImplementation("androidx.compose.ui:ui-tooling:1.7.5")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.7.5")
 
-    //noinspection UseTomlInstead
-    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
+    // Тестовые зависимости
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.5")
 
-
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
+    // Основные AndroidX зависимости
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 }
