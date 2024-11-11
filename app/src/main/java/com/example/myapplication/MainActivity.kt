@@ -63,9 +63,6 @@ import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.ConnectionResult
 
 
-
-private var isNetworkCallbackRegistered = false
-
 val LightBlue = Color(0xFFADD8E6)
 
 
@@ -289,13 +286,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
     }
-}
-
-// Проверка, включены ли службы местоположения на устройстве
-fun isLocationServiceEnabled(context: Context): Boolean {
-    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 }
 
 @Composable
