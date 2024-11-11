@@ -60,6 +60,8 @@ import android.provider.Settings
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.ConnectionResult
+import android.content.SharedPreferences
+import android.location.LocationManager
 
 
 val LightBlue = Color(0xFFADD8E6)
@@ -142,7 +144,7 @@ class MainActivity : ComponentActivity() {
                     containerColor = LightBlue
                 ) { innerPadding ->
                     // Передаем в AppContent данные о местоположении и статусе интернета
-                    AppContent(
+                    AppContent_backend(
                         modifier = Modifier.padding(innerPadding),
                         fusedLocationClient = fusedLocationClient,
                         isInternetEnabled = isInternetEnabled
@@ -287,8 +289,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+fun isLocationServiceEnabled(context: android.content.Context): Boolean {
+    val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+    return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+}
+
 @Composable
-fun AppContent(
+fun AppContent_backend(
     modifier: Modifier = Modifier,
     fusedLocationClient: FusedLocationProviderClient,
     isInternetEnabled: Boolean
@@ -297,14 +305,18 @@ fun AppContent(
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
     val context = LocalContext.current
 
-    // Проверка доступа к местоположению
+    // Проверка состояния службы местоположения
+    val isLocationEnabled = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+            isLocationServiceEnabled(context)
+
+    // Лаунчер для запроса разрешений
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            getUserLocation(fusedLocationClient, context) { location ->
+            getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
                 userLocation = location
-                showMap = true  // Переходим к отображению карты
+                showMap = true  // Переход к отображению карты
             }
         } else {
             Toast.makeText(context, "Доступ к местоположению отклонен", Toast.LENGTH_SHORT).show()
@@ -313,8 +325,8 @@ fun AppContent(
 
     // Обработка нажатия кнопки
     val onButtonClick: () -> Unit = {
-        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            getUserLocation(fusedLocationClient, context) { location ->
+        if (isLocationEnabled) {
+            getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
                 userLocation = location
                 showMap = true  // Переход к карте после получения местоположения
             }
@@ -327,15 +339,73 @@ fun AppContent(
         // Переход на экран карты после получения местоположения
         MapScreen_Backend(modifier, userLocation)
     } else {
-        // Начальный экран с кнопкой
+        // Начальный экран с кнопкой и индикаторами
         ButtonInterface(
             onButtonClick = onButtonClick,
-            isLocationEnabled = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED,
+            isLocationEnabled = isLocationEnabled,
             isInternetEnabled = isInternetEnabled,
             modifier = modifier
         )
     }
 }
+
+// Функция для получения и сохранения местоположения
+private fun getUserLocation(
+    fusedLocationClient: FusedLocationProviderClient,
+    context: Context,
+    isInternetEnabled: Boolean,
+    onLocationReceived: (GeoPoint?) -> Unit)
+{
+    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        Toast.makeText(context, "Нет разрешения на доступ к местоположению", Toast.LENGTH_SHORT).show()
+        onLocationReceived(null)
+        return
+    }
+
+    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+    if (isInternetEnabled) {
+        // Получение последнего известного местоположения онлайн и его сохранение
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location ->
+                if (location != null) {
+                    val geoPoint = GeoPoint(location.latitude, location.longitude)
+                    saveLocationToPreferences(sharedPreferences, geoPoint) // Сохраняем местоположение
+                    onLocationReceived(geoPoint)
+                } else {
+                    Toast.makeText(context, "Местоположение не получено", Toast.LENGTH_SHORT).show()
+                    onLocationReceived(getSavedLocation(sharedPreferences)) // Используем сохраненное местоположение
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(context, "Ошибка получения местоположения", Toast.LENGTH_SHORT).show()
+                onLocationReceived(getSavedLocation(sharedPreferences))
+            }
+    } else {
+        // Офлайн-режим: загружаем последнее сохраненное местоположение или используем координаты по умолчанию
+        onLocationReceived(getSavedLocation(sharedPreferences) ?: GeoPoint(48.4647, 35.0462)) // Днепр по умолчанию
+    }
+}
+
+// Функция для сохранения местоположения в SharedPreferences
+private fun saveLocationToPreferences(sharedPreferences: SharedPreferences, geoPoint: GeoPoint) {
+    sharedPreferences.edit()
+        .putFloat("last_latitude", geoPoint.latitude.toFloat())
+        .putFloat("last_longitude", geoPoint.longitude.toFloat())
+        .apply()
+}
+
+// Функция для загрузки последнего сохраненного местоположения
+private fun getSavedLocation(sharedPreferences: SharedPreferences): GeoPoint? {
+    val latitude = sharedPreferences.getFloat("last_latitude", Float.NaN)
+    val longitude = sharedPreferences.getFloat("last_longitude", Float.NaN)
+    return if (!latitude.isNaN() && !longitude.isNaN()) {
+        GeoPoint(latitude.toDouble(), longitude.toDouble())
+    } else {
+        null
+    }
+}
+
 
 // Экран карты с загрузкой маркеров всех устройств из Firestore
 @Composable
@@ -381,32 +451,6 @@ fun MapScreen_Backend(modifier: Modifier, userLocation: GeoPoint?) {
     )
 }
 
-// Вспомогательная функция для получения местоположения пользователя
-private fun getUserLocation(
-    fusedLocationClient: FusedLocationProviderClient,
-    context: Context,
-    onLocationReceived: (GeoPoint?) -> Unit
-) {
-    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-        Toast.makeText(context, "Нет разрешения на доступ к местоположению", Toast.LENGTH_SHORT).show()
-        onLocationReceived(null)
-        return
-    }
-
-    fusedLocationClient.lastLocation
-        .addOnSuccessListener { location ->
-            if (location != null) {
-                onLocationReceived(GeoPoint(location.latitude, location.longitude))
-            } else {
-                Toast.makeText(context, "Ошибка: не удалось получить местоположение", Toast.LENGTH_SHORT).show()
-                onLocationReceived(null)
-            }
-        }
-        .addOnFailureListener { exception ->
-            Toast.makeText(context, "Ошибка получения местоположения: ${exception.message}", Toast.LENGTH_SHORT).show()
-            onLocationReceived(null)
-        }
-}
 
     @Composable
     fun ButtonInterface(
@@ -515,7 +559,7 @@ private fun getUserLocation(
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
         MyApplicationTheme {
-            AppContent(
+            AppContent_backend(
                 fusedLocationClient = fusedLocationClient,
                 isInternetEnabled = true // Задаём значение для предварительного просмотра
             )

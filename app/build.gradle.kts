@@ -58,7 +58,6 @@ dependencies {
 
     implementation("com.google.android.gms:play-services-base:18.5.0")
 
-
     // Firebase зависимости
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
