@@ -1,10 +1,6 @@
 package com.example.myapplication
 
-
-import android.content.BroadcastReceiver
-import android.content.Intent
-import android.content.IntentFilter
-import androidx.compose.runtime.*
+import android.location.LocationManager
 import android.Manifest
 import android.util.Log
 import android.os.Looper
@@ -22,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -60,12 +57,14 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
 import com.google.android.gms.location.LocationRequest
 import com.google.firebase.FirebaseApp
+import com.google.firebase.firestore.ktx.firestore
+import android.provider.Settings
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.ConnectionResult
-import android.content.SharedPreferences
-import android.location.LocationManager
 
+//private var isNetworkCallbackRegistered = false
+private var isNetworkCallbackRegistered = false
 
 val LightBlue = Color(0xFFADD8E6)
 
@@ -74,22 +73,18 @@ class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
+    private var isInternetEnabled by mutableStateOf(false)
+    private val db: FirebaseFirestore = Firebase.firestore
     private lateinit var mapView: MapView
     private val db: FirebaseFirestore = Firebase.firestore
     private var isInternetEnabled by mutableStateOf(false)
     private var isNetworkCallbackRegistered = false
-    private lateinit var locationCallback: com.google.android.gms.location.LocationCallback
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Состояние для хранения введенного имени пользователя
-        var userName by mutableStateOf("")
-
         // Инициализация Firebase
         FirebaseApp.initializeApp(this)
         Log.d("MainActivity", "Firebase успешно инициализирован")
-
         // Проверка доступности Google Play Services
         val googleApiAvailability = GoogleApiAvailability.getInstance()
         val resultCode = googleApiAvailability.isGooglePlayServicesAvailable(this)
@@ -99,10 +94,11 @@ class MainActivity : ComponentActivity() {
             Log.e("MainActivity", "Google Play Services недоступны или не обновлены")
         }
 
-        // Инициализация клиента местоположения
+        // Инициализация клиента для получения местоположения перед его использованием
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         Log.d("MainActivity", "FusedLocationProviderClient инициализирован")
 
+        // Инициализация карты
         // Настройка osmdroid
         Configuration.getInstance().apply {
             userAgentValue = packageName
@@ -110,7 +106,6 @@ class MainActivity : ComponentActivity() {
             osmdroidTileCache = File(osmdroidBasePath, "tiles")
         }
         Log.d("MainActivity", "osmdroid настроен")
-
         // Инициализация MapView
         mapView = MapView(this).apply {
             setTileSource(TileSourceFactory.MAPNIK)
@@ -134,20 +129,22 @@ class MainActivity : ComponentActivity() {
         isNetworkCallbackRegistered = true
         Log.d("MainActivity", "Сетевой callback зарегистрирован")
 
+        // Проверка разрешения на доступ к местоположению
         // Проверка разрешений
         if (checkLocationPermission()) {
+            startLocationUpdates()  // Запуск после полной инициализации
             Log.d("MainActivity", "Разрешение на местоположение уже есть")
-            // Создаем и запускаем locationCallback с userName
-            locationCallback = createLocationCallback(userName)
-            startLocationUpdates(userName)
+            startLocationUpdates()
         } else {
             Log.d("MainActivity", "Запрос разрешения на местоположение")
             requestLocationPermission()
         }
 
+        // Загрузка всех местоположений из Firestore и добавление на карту
         // Загрузка данных из Firestore
         loadAllLocationsFromFirestore()
 
+        // Установка Compose UI
         // Установка интерфейса Compose
         setContent {
             MyApplicationTheme {
@@ -155,8 +152,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     containerColor = LightBlue
                 ) { innerPadding ->
+                    AndroidView(factory = { mapView }, modifier = Modifier.padding(innerPadding))
                     // Передаем в AppContent данные о местоположении и статусе интернета
-                    AppContent_backend(
+                    AppContent(
                         modifier = Modifier.padding(innerPadding),
                         fusedLocationClient = fusedLocationClient,
                         isInternetEnabled = isInternetEnabled
@@ -166,448 +164,600 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun updateNetworkStatus(isConnected: Boolean) {
-        isInternetEnabled = isConnected
-        Log.d("NetworkStatus", "Обновлен статус сети: $isConnected")
+    private var isNetworkCallbackRegistered = false
+}
 
-        runOnUiThread {
-            Toast.makeText(this, if (isConnected) "Режим онлайн" else "Режим оффлайн", Toast.LENGTH_SHORT).show()
+// Оновлення статусу мережі
+private fun updateNetworkStatus(isConnected: Boolean) {
+    isInternetEnabled = isConnected
+    Configuration.getInstance().load(this, androidx.preference.PreferenceManager.getDefaultSharedPreferences(this))
+    Configuration.getInstance().isMapViewHardwareAccelerated = true
+    Log.d("NetworkStatus", "Обновлен статус сети: $isConnected")
+
+    runOnUiThread {
+        Toast.makeText(this, if (isConnected) "Режим онлайн" else "Режим оффлайн", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun checkLocationPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+        this, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    val hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    Log.d("MainActivity", "Проверка разрешения на местоположение: $hasPermission")
+    return hasPermission
+}
+
+override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<String>,
+    grantResults: IntArray
+) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+        if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+            startLocationUpdates()
+        } else {
+            Toast.makeText(this, "Доступ к местоположению необходим для работы приложения", Toast.LENGTH_SHORT).show()
         }
     }
-
-    private fun checkLocationPermission(): Boolean {
-        val hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        Log.d("MainActivity", "Проверка разрешения на местоположение: $hasPermission")
-        return hasPermission
-    }
-
     private fun requestLocationPermission() {
         ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
         Log.d("MainActivity", "Запрос разрешения на доступ к местоположению")
     }
 
-    // Запуск обновлений местоположения с userName
-    fun startLocationUpdates(userName: String) {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // Если разрешение отсутствует, запросите его у пользователя
-            requestLocationPermission()
-            return
-        }
-
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
         val locationRequest = LocationRequest.create().apply {
             interval = 6000L
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
-        // Создаем новый коллбэк, передавая userName
-        locationCallback = createLocationCallback(userName)
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-        Log.d("MainActivity", "Начато обновление местоположения для пользователя: $userName")
+        if (checkLocationPermission()) {
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+            Log.d("MainActivity", "Начато обновление местоположения")
+        } else {
+            requestLocationPermission()
+            Log.w("MainActivity", "Отсутствует разрешение на местоположение, обновление не начато")
+        }
     }
 
+    private fun sendLocationToFirestore() {
+        Log.d("Firestore", "Отправка данных о местоположении в Firestore")
+        if (checkLocationPermission()) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                if (location != null) {
+                    val locationData = hashMapOf(
+                        "latitude" to location.latitude,
+                        "longitude" to location.longitude,
+                        "timestamp" to System.currentTimeMillis()
+                    )
+                    val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                    db.collection("locations")
+                        .document(deviceId)
+                        .set(locationData)
+                        .addOnSuccessListener {
+                            Log.d("Firestore", "Дані про місцезнаходження успішно відправлені")
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e("Firestore", "Помилка при відправці даних: ", e)
+                        }
+                    db.collection("locations").document(deviceId).set(locationData)
+                        .addOnSuccessListener { Log.d("Firestore", "Данные местоположения успешно отправлены") }
+                        .addOnFailureListener { e -> Log.e("Firestore", "Ошибка отправки данных местоположения", e) }
+                } else {
+                    Log.w("Firestore", "Местоположение не получено")
+                }
+            }.addOnFailureListener { e ->
+                Log.e("Firestore", "Ошибка при получении местоположения", e)
+            }
+        } else {
+            Log.w("Firestore", "Отсутствует разрешение на доступ к местоположению, данные не отправлены")
+        }
+    }
 
-
-    private fun createLocationCallback(userName: String): com.google.android.gms.location.LocationCallback {
-        return object : com.google.android.gms.location.LocationCallback() {
-            override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
+    private val locationCallback = object : com.google.android.gms.location.LocationCallback() {
+        override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
+            val location = locationResult.lastLocation
+            if (location != null) {
+                val geoPoint = GeoPoint(location.latitude, location.longitude)
+                Log.d("Location", "Оновлене місцезнаходження: $geoPoint")
                 locationResult.lastLocation?.let {
                     Log.d("LocationCallback", "Новое местоположение: ${it.latitude}, ${it.longitude}")
-                    sendLocationToFirestore(it.latitude, it.longitude, userName) // Передаем имя пользователя
+                    sendLocationToFirestore()
                 }
             }
         }
-    }
 
-    // Функция для отправки местоположения в Firestore
-    private fun sendLocationToFirestore(latitude: Double, longitude: Double, userName: String) {
-        if (userName.isBlank()) {
-            Log.e("Firestore", "Имя пользователя пустое. Данные местоположения не отправлены.")
-            return
-        }
-        val locationData = hashMapOf(
-            "latitude" to latitude,
-            "longitude" to longitude,
-            "timestamp" to System.currentTimeMillis()
-        )
-
-        db.collection("locations").document(userName).set(locationData)
-            .addOnSuccessListener { Log.d("Firestore", "Данные местоположения успешно отправлены") }
-            .addOnFailureListener { e -> Log.e("Firestore", "Ошибка отправки данных местоположения", e) }
-    }
-
-
-    private fun loadAllLocationsFromFirestore() {
-        db.collection("locations").addSnapshotListener { snapshots, e ->
-            if (e != null) {
-                Log.w("Firestore", "Ошибка получения данных из Firestore", e)
-                return@addSnapshotListener
-            }
-
-            // Проверка, что данные были получены
-            snapshots?.let {
-                mapView.overlays.clear() // Очищаем карту перед добавлением новых маркеров
-
-                for (document in snapshots) {
-                    val latitude = document.getDouble("latitude")
-                    val longitude = document.getDouble("longitude")
-                    val deviceUserName = document.id // Имя пользователя из ID документа
-
-                    if (latitude != null && longitude != null) {
-                        val geoPoint = GeoPoint(latitude, longitude)
-                        addMarkerToMap(geoPoint, deviceUserName) // Добавляем маркер с именем пользователя
+        private fun loadAllLocationsFromFirestore() {
+            db.collection("locations")
+                .addSnapshotListener { snapshots, e ->
+                    if (e != null) {
+                        Log.w("Firestore", "Listen failed.", e)
+                        return@addSnapshotListener
                     }
-                }
+                    Log.d("Firestore", "Начало загрузки данных о местоположении из Firestore")
 
-                mapView.invalidate() // Принудительно обновляем карту после добавления всех маркеров
-            }
-        }
-    }
+                    if (snapshots != null) {
+                        mapView.overlays.clear()
+                        db.collection("locations").addSnapshotListener { snapshots, e ->
+                            if (e != null) {
+                                Log.w("Firestore", "Ошибка получения данных из Firestore", e)
+                                return@addSnapshotListener
+                            }
 
+                            for (document in snapshots) {
+                                val latitude = document.getDouble("latitude")
+                                val longitude = document.getDouble("longitude")
+                                snapshots?.let {
+                                    Log.d("Firestore", "Обновление местоположений с Firestore")
 
-    private fun addMarkerToMap(geoPoint: GeoPoint, userName: String) {
-        val marker = Marker(mapView).apply {
-            position = geoPoint
-            title = userName
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-        }
-        mapView.overlays.add(marker) // Добавляем маркер на карту
-        Log.d("Map", "Добавлен маркер для пользователя $userName на карте")
-    }
-
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (isNetworkCallbackRegistered) {
-            try {
-                connectivityManager.unregisterNetworkCallback(networkCallback)
-                isNetworkCallbackRegistered = false
-                Log.d("MainActivity", "NetworkCallback успешно отменен в onDestroy")
-            } catch (e: IllegalArgumentException) {
-                Log.e("MainActivity", "Ошибка при отмене NetworkCallback: NetworkCallback не был зарегистрирован", e)
-            }
-        } else {
-            Log.d("MainActivity", "NetworkCallback не был зарегистрирован, пропускаем отмену")
-        }
-
-        // Отмена обновлений местоположения
-        fusedLocationClient.removeLocationUpdates(locationCallback)
-        Log.d("MainActivity", "Обновления местоположения успешно остановлены")
-    }
-
-    companion object {
-        private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
-    }
-}
-
-@Composable
-fun AppContent_backend(
-    modifier: Modifier = Modifier,
-    fusedLocationClient: FusedLocationProviderClient,
-    isInternetEnabled: Boolean
-) {
-    var showMap by remember { mutableStateOf(false) }
-    var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
-    var userName by remember { mutableStateOf("") } // Поле для хранения имени пользователя
-    val context = LocalContext.current
-
-    // Состояние для отслеживания доступности местоположения
-    var isLocationEnabled by remember {
-        mutableStateOf(
-            ActivityCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(context)
-        )
-    }
-
-    // Обновление состояния местоположения при его изменении
-    DisposableEffect(context) {
-        val locationStatusReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                isLocationEnabled = ActivityCompat.checkSelfPermission(
-                    ctx ?: return, Manifest.permission.ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(ctx)
-            }
-        }
-
-        // Регистрация BroadcastReceiver для прослушивания изменений состояния службы местоположения
-        context.applicationContext.registerReceiver(
-            locationStatusReceiver,
-            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
-        )
-
-        // Отмена регистрации при выходе из эффекта
-        onDispose {
-            context.applicationContext.unregisterReceiver(locationStatusReceiver)
-        }
-    }
-
-    // Лаунчер для запроса разрешений
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
-                userLocation = location
-                showMap = true  // Переход к отображению карты
-            }
-        } else {
-            Toast.makeText(context, "Доступ к местоположению отклонен", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // Обработка нажатия кнопки с передачей userName в startLocationUpdates
-    val onButtonClick: () -> Unit = {
-        if (userName.isNotBlank()) { // Проверяем, введено ли имя пользователя
-            // Вызываем startLocationUpdates с userName для обновлений местоположения
-            (context as MainActivity).startLocationUpdates(userName)
-            getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
-                userLocation = location
-                showMap = true  // Переход к карте после получения местоположения
-            }
-        } else {
-            Toast.makeText(context, "Пожалуйста, введите ваше имя", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // Условие для отображения карты или начального экрана
-    if (showMap && userLocation != null) {
-        MapScreen_Backend(modifier, userLocation, userName) // Передаем userName для отображения на карте
-    } else {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Поле ввода имени пользователя
-            TextField(
-                value = userName,
-                onValueChange = { userName = it },
-                label = { Text("Введите ваше имя") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            )
-
-            // Кнопка для продолжения
-            ButtonInterface(
-                onButtonClick = onButtonClick,
-                isLocationEnabled = isLocationEnabled,
-                isInternetEnabled = isInternetEnabled,
-                modifier = modifier
-            )
-        }
-    }
-}
-
-// Проверка, включены ли службы местоположения на устройстве
-fun isLocationServiceEnabled(context: Context): Boolean {
-    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-}
-
-// Функция для получения и сохранения местоположения
-private fun getUserLocation(
-    fusedLocationClient: FusedLocationProviderClient,
-    context: Context,
-    isInternetEnabled: Boolean,
-    onLocationReceived: (GeoPoint?) -> Unit)
-{
-    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-        Toast.makeText(context, "Нет разрешения на доступ к местоположению", Toast.LENGTH_SHORT).show()
-        onLocationReceived(null)
-        return
-    }
-
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-
-    if (isInternetEnabled) {
-        // Получение последнего известного местоположения онлайн и его сохранение
-        fusedLocationClient.lastLocation
-            .addOnSuccessListener { location ->
-                if (location != null) {
-                    val geoPoint = GeoPoint(location.latitude, location.longitude)
-                    saveLocationToPreferences(sharedPreferences, geoPoint) // Сохраняем местоположение
-                    onLocationReceived(geoPoint)
-                } else {
-                    Toast.makeText(context, "Местоположение не получено", Toast.LENGTH_SHORT).show()
-                    onLocationReceived(getSavedLocation(sharedPreferences)) // Используем сохраненное местоположение
-                }
-            }
-            .addOnFailureListener {
-                Toast.makeText(context, "Ошибка получения местоположения", Toast.LENGTH_SHORT).show()
-                onLocationReceived(getSavedLocation(sharedPreferences))
-            }
-    } else {
-        // Офлайн-режим: загружаем последнее сохраненное местоположение или используем координаты по умолчанию
-        onLocationReceived(getSavedLocation(sharedPreferences) ?: GeoPoint(48.4647, 35.0462)) // Днепр по умолчанию
-    }
-}
-
-// Функция для сохранения местоположения в SharedPreferences
-private fun saveLocationToPreferences(sharedPreferences: SharedPreferences, geoPoint: GeoPoint) {
-    sharedPreferences.edit()
-        .putFloat("last_latitude", geoPoint.latitude.toFloat())
-        .putFloat("last_longitude", geoPoint.longitude.toFloat())
-        .apply()
-}
-
-// Функция для загрузки последнего сохраненного местоположения
-private fun getSavedLocation(sharedPreferences: SharedPreferences): GeoPoint? {
-    val latitude = sharedPreferences.getFloat("last_latitude", Float.NaN)
-    val longitude = sharedPreferences.getFloat("last_longitude", Float.NaN)
-    return if (!latitude.isNaN() && !longitude.isNaN()) {
-        GeoPoint(latitude.toDouble(), longitude.toDouble())
-    } else {
-        null
-    }
-}
-
-
-// Экран карты с загрузкой маркеров всех устройств из Firestore
-@Composable
-fun MapScreen_Backend(
-    modifier: Modifier = Modifier,
-    userLocation: GeoPoint?,
-    userName: String // Добавлен параметр для имени пользователя
-) {
-    AndroidView(
-        factory = { context ->
-            MapView(context).apply {
-                controller.setZoom(15.0)
-                setMultiTouchControls(true)
-
-                post {
-                    if (userLocation != null) {
-                        controller.setCenter(userLocation)
-                        val marker = Marker(this).apply {
-                            position = userLocation
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            title = userName // Отображение введенного имени пользователя
+                                    if (latitude != null && longitude != null) {
+                                        val geoPoint = GeoPoint(latitude, longitude)
+                                        addMarkerToMap(geoPoint, document.id)
+                                    }
+                                    // Очищаем старые маркеры перед добавлением новых
+                                    mapView.overlays.clear()
+                                    for (document in snapshots) {
+                                        val latitude = document.getDouble("latitude")
+                                        val longitude = document.getDouble("longitude")
+                                        if (latitude != null && longitude != null) {
+                                            val geoPoint = GeoPoint(latitude, longitude)
+                                            addMarkerToMap(geoPoint, document.id)
+                                        }
+                                    }
+                                    mapView.invalidate()  // Обновление карты для отображения новых маркеров
+                                }
+                            }
                         }
-                        overlays.add(marker)
+
+                        private fun addMarkerToMap(geoPoint: GeoPoint, deviceId: String) {
+                            val marker = Marker(mapView).apply {
+                                position = geoPoint
+                                title = "Device: $deviceId"
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            }
+                            mapView.overlays.add(marker)
+                            mapView.invalidate()
+                        }
+                        private fun requestLocationPermission() {
+                            if (!checkLocationPermission()) {
+                                ActivityCompat.requestPermissions(
+                                    this,
+                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                                    LOCATION_PERMISSION_REQUEST_CODE
+                                )
+                            }
+                            Log.d("Map", "Добавлен маркер для устройства $deviceId на карте")
+                        }
+
+                        override fun onDestroy() {
+                            super.onDestroy()
+
+                            // Проверка, был ли зарегистрирован NetworkCallback перед его отменой
+                            if (isNetworkCallbackRegistered) {
+                                try {
+                                    connectivityManager.unregisterNetworkCallback(networkCallback)
+                                    isNetworkCallbackRegistered = false
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Ошибка при отмене регистрации NetworkCallback: ", e)
+                                    Log.d("MainActivity", "NetworkCallback успешно отменен в onDestroy")
+                                } catch (e: IllegalArgumentException) {
+                                    Log.e("MainActivity", "Ошибка при отмене NetworkCallback: NetworkCallback не был зарегистрирован", e)
+                                }
+                            } else {
+                                Log.d("MainActivity", "NetworkCallback не был зарегистрирован, пропускаем отмену")
+                            }
+
+                            // Отмена обновлений местоположения
+                            fusedLocationClient.removeLocationUpdates(locationCallback)
+                            Log.d("MainActivity", "Обновления местоположения успешно остановлены")
+                        }
+
+                        companion object {
+                            private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
+                        }
                     }
-                    invalidate()
-                }
-            }
-        },
-        modifier = modifier.fillMaxSize()
-    )
-}
 
-
-    @Composable
-    fun ButtonInterface(
-        onButtonClick: () -> Unit,
-        isLocationEnabled: Boolean,
-        isInternetEnabled: Boolean,
-        modifier: Modifier = Modifier
-    ) {
-        ConstraintLayout(
-            modifier = modifier
-                .fillMaxSize()
-                .background(Color(0xFFF5F5F5))
-        ) {
-            val (locationCard, internetCard, button) = createRefs()
-
-            // Карточка для индикатора местоположения
-            StatusCard(
-                title = "Местоположение",
-                isEnabled = isLocationEnabled,
-                modifier = Modifier
-                    .constrainAs(locationCard) {
-                        top.linkTo(parent.top, margin = 32.dp)
-                        start.linkTo(parent.start, margin = 16.dp)
-                        end.linkTo(parent.end, margin = 16.dp)
+                    // Проверка, включены ли службы местоположения на устройстве
+                    fun isLocationServiceEnabled(context: Context): Boolean {
+                        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                        locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
                     }
-            )
 
-            // Карточка для индикатора интернета
-            StatusCard(
-                title = "Интернет",
-                isEnabled = isInternetEnabled,
-                modifier = Modifier
-                    .constrainAs(internetCard) {
-                        top.linkTo(locationCard.bottom, margin = 16.dp)
-                        start.linkTo(parent.start, margin = 16.dp)
-                        end.linkTo(parent.end, margin = 16.dp)
-                    }
-            )
+                    @Composable
+                    fun AppContent(
+                        modifier: Modifier = Modifier,
+                        fusedLocationClient: FusedLocationProviderClient,
+                        isInternetEnabled: Boolean
+                    ) {
+                        var showMap by remember { mutableStateOf(false) }
+                        var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
+                        val context = LocalContext.current
 
-            // Кнопка "Начать"
-            Button(
-                onClick = onButtonClick,
-                modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp))
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF6A5ACD), Color(0xFF483D8B))
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .constrainAs(button) {
-                        bottom.linkTo(parent.bottom, margin = 32.dp)
-                        start.linkTo(parent.start, margin = 16.dp)
-                        end.linkTo(parent.end, margin = 16.dp)
-                    },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Начать", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            }
-        }
-    }
+                        // Проверка разрешения и состояния служб местоположения
+                        var isLocationEnabled by remember {
+                            mutableStateOf(
+                                ActivityCompat.checkSelfPermission(
+                                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(context)
+                            )
+                        }
+                        // Обновляем isLocationEnabled, когда изменяется состояние служб местоположения
+                        LaunchedEffect(Unit) {
+                            // Этот код будет выполняться только при изменении служб местоположения
+                            while (true) {
+                                val currentLocationEnabled = isLocationServiceEnabled(context)
+                                if (isLocationEnabled != currentLocationEnabled) {
+                                    isLocationEnabled = currentLocationEnabled
+                                }
+                                kotlinx.coroutines.delay(1000L) // Проверка каждые 1 секунду
+                            }
+                        }
+                        // Проверяем разрешение на доступ к местоположению и, если оно есть, получаем координаты
+                        // Проверка доступа к местоположению
+                        val locationPermissionLauncher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.RequestPermission()
+                        ) { isGranted: Boolean ->
+                            if (isGranted) {
+                                getUserLocation(fusedLocationClient, context) { location ->
+                                    userLocation = location
+                                    showMap = true
+                                    showMap = true  // Переходим к отображению карты
+                                }
+                            } else {
+                                Toast.makeText(context, "Разрешение на доступ к местоположению отклонено", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Доступ к местоположению отклонен", Toast.LENGTH_SHORT).show()
+                            }
+                        }
 
-    @Composable
-    fun StatusCard(
-        title: String,
-        isEnabled: Boolean,
-        modifier: Modifier = Modifier
-    ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF333333)
-                )
+                        // Функция, которая будет запускаться при нажатии на кнопку
+                        // Обработка нажатия кнопки
+                        val onButtonClick: () -> Unit = {
+                            if (isLocationEnabled) {
+                                if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                                    getUserLocation(fusedLocationClient, context) { location ->
+                                        userLocation = location
+                                        showMap = true
+                                        showMap = true  // Переход к карте после получения местоположения
+                                    }
+                                } else {
+                                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                }
+                            }
 
-                Icon(
-                    imageVector = if (isEnabled) Icons.Filled.CheckCircle else Icons.Filled.Close ,
-                    contentDescription = if (isEnabled) "Включено" else "Выключено",
-                    tint = if (isEnabled) Color(0xFF4CAF50) else Color(0xFFFF5722), // зелёный или красный цвет
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-    }
+                            if (showMap) {
+                                MapScreen_Backend(modifier = modifier, userLocation = userLocation)
+                                if (showMap && userLocation != null) {
+                                    // Переход на экран карты после получения местоположения
+                                    MapScreen_Backend(modifier, userLocation)
+                                } else {
+                                    // Начальный экран с кнопкой
+                                    ButtonInterface(
+                                        onButtonClick = onButtonClick,
+                                        isLocationEnabled = isLocationEnabled,
+                                        isLocationEnabled = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED,
+                                        isInternetEnabled = isInternetEnabled,
+                                        modifier = modifier
+                                    )
+                                }
+                            }
 
-    @Preview(showBackground = true)
+                            // Функция для получения местоположения
+// Экран карты с загрузкой маркеров всех устройств из Firestore
+                            @Composable
+                            fun MapScreen_Backend(modifier: Modifier, userLocation: GeoPoint?) {
+                                AndroidView(
+                                    factory = { context ->
+                                        MapView(context).apply {
+                                            controller.setZoom(15.0)
+                                            setMultiTouchControls(true)
+                                            post {
+                                                // Центр карты на текущем местоположении пользователя
+                                                userLocation?.let { geoPoint ->
+                                                    controller.setCenter(geoPoint)
+                                                    val marker = Marker(this).apply {
+                                                        position = geoPoint
+                                                        title = "Вы здесь"
+                                                    }
+                                                    overlays.add(marker)
+                                                }
+                                                // Подгружаем все местоположения из Firestore
+                                                val db = Firebase.firestore
+                                                db.collection("locations")
+                                                    .get()
+                                                    .addOnSuccessListener { documents ->
+                                                        for (document in documents) {
+                                                            val latitude = document.getDouble("latitude")
+                                                            val longitude = document.getDouble("longitude")
+                                                            if (latitude != null && longitude != null) {
+                                                                val deviceMarker = Marker(this).apply {
+                                                                    position = GeoPoint(latitude, longitude)
+                                                                    title = "Device: ${document.id}"  // Устанавливаем ID устройства
+                                                                }
+                                                                overlays.add(deviceMarker)
+                                                            }
+                                                        }
+                                                        invalidate()  // Обновляем карту для отображения маркеров
+                                                    }
+                                            }
+                                        }
+                                    },
+                                    modifier = modifier.fillMaxSize()
+                                )
+                            }
+                            // Вспомогательная функция для получения местоположения пользователя
+                            private fun getUserLocation(
+                                fusedLocationClient: FusedLocationProviderClient,
+                                context: Context,
+                                onLocationReceived: (GeoPoint?) -> Unit
+                            ) {
+                                if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                                    Toast.makeText(context, "Нет разрешения на доступ к местоположению", Toast.LENGTH_SHORT).show()
+                                    onLocationReceived(null)
+                                    return
+                                }
 
-    @Composable
-    fun AppContentPreview()
-    {
-        val context = LocalContext.current
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+                                fusedLocationClient.lastLocation
+                                    .addOnSuccessListener { location ->
+                                        if (location != null) {
+                                            onLocationReceived(GeoPoint(location.latitude, location.longitude))
+                                        } else {
+                                            Toast.makeText(context, "Ошибка: не удалось получить местоположение", Toast.LENGTH_SHORT).show()
+                                            onLocationReceived(null)
+                                        }
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        Toast.makeText(context, "Ошибка получения местоположения: ${exception.message}", Toast.LENGTH_SHORT).show()
+                                        onLocationReceived(null)
+                                    }
+                            }
 
-        MyApplicationTheme {
-            AppContent_backend(
-                fusedLocationClient = fusedLocationClient,
-                isInternetEnabled = true // Задаём значение для предварительного просмотра
-            )
-        }
-    }
+                            @Composable
+                            fun ButtonInterface(
+                                onButtonClick: () -> Unit,
+                                isLocationEnabled: Boolean,
+                                isInternetEnabled: Boolean,
+                                modifier: Modifier = Modifier
+                            ) {
+                                ConstraintLayout(
+                                    modifier = modifier
+                                        .fillMaxSize()
+                                        .background(Color(0xFFF5F5F5))
+                                    @Composable
+                                    fun ButtonInterface(
+                                        onButtonClick: () -> Unit,
+                                        isLocationEnabled: Boolean,
+                                        isInternetEnabled: Boolean,
+                                        modifier: Modifier = Modifier
+                                    ) {
+                                        val (locationCard, internetCard, button) = createRefs()
+                                        // Карточка для индикатора местоположения
+                                        StatusCard(
+                                            title = "Местоположение",
+                                            isEnabled = isLocationEnabled,
+                                            modifier = Modifier
+                                                .constrainAs(locationCard) {
+                                                    top.linkTo(parent.top, margin = 32.dp)
+                                                    start.linkTo(parent.start, margin = 16.dp)
+                                                    end.linkTo(parent.end, margin = 16.dp)
+                                                }
+                                        )
+                                        ConstraintLayout(
+                                            modifier = modifier
+                                                .fillMaxSize()
+                                                .background(Color(0xFFF5F5F5))
+                                        ) {
+                                            val (locationCard, internetCard, button) = createRefs()
+                                            // Карточка для индикатора местоположения
+                                            StatusCard(
+                                                title = "Местоположение",
+                                                isEnabled = isLocationEnabled,
+                                                modifier = Modifier
+                                                    .constrainAs(locationCard) {
+                                                        top.linkTo(parent.top, margin = 32.dp)
+                                                        start.linkTo(parent.start, margin = 16.dp)
+                                                        end.linkTo(parent.end, margin = 16.dp)
+                                                    }
+                                            )
+
+                                            // Карточка для индикатора интернета
+                                            StatusCard(
+                                                title = "Интернет",
+                                                isEnabled = isInternetEnabled,
+                                                modifier = Modifier
+                                                    .constrainAs(internetCard) {
+                                                        top.linkTo(locationCard.bottom, margin = 16.dp)
+                                                        start.linkTo(parent.start, margin = 16.dp)
+                                                        end.linkTo(parent.end, margin = 16.dp)
+                                                    }
+                                            )
+                                            // Карточка для индикатора интернета
+                                            StatusCard(
+                                                title = "Интернет",
+                                                isEnabled = isInternetEnabled,
+                                                modifier = Modifier
+                                                    .constrainAs(internetCard) {
+                                                        top.linkTo(locationCard.bottom, margin = 16.dp)
+                                                        start.linkTo(parent.start, margin = 16.dp)
+                                                        end.linkTo(parent.end, margin = 16.dp)
+                                                    }
+                                            )
+
+                                            // Кнопка "Начать"
+                                            Button(
+                                                onClick = onButtonClick,
+                                                modifier = Modifier
+                                                    .padding(horizontal = 8.dp)
+                                                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp))
+                                                    .background(
+                                                        brush = Brush.horizontalGradient(
+                                                            colors = listOf(Color(0xFF6A5ACD), Color(0xFF483D8B))
+                                                        ),
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    )
+                                                    .constrainAs(button) {
+                                                        bottom.linkTo(parent.bottom, margin = 32.dp)
+                                                        start.linkTo(parent.start, margin = 16.dp)
+                                                        end.linkTo(parent.end, margin = 16.dp)
+                                                    },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Text("Начать", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                                                // Кнопка "Начать"
+                                                Button(
+                                                    onClick = onButtonClick,
+                                                    modifier = Modifier
+                                                        .padding(horizontal = 8.dp)
+                                                        .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp))
+                                                        .background(
+                                                            brush = Brush.horizontalGradient(
+                                                                colors = listOf(Color(0xFF6A5ACD), Color(0xFF483D8B))
+                                                            ),
+                                                            shape = RoundedCornerShape(12.dp)
+                                                        )
+                                                        .constrainAs(button) {
+                                                            bottom.linkTo(parent.bottom, margin = 32.dp)
+                                                            start.linkTo(parent.start, margin = 16.dp)
+                                                            end.linkTo(parent.end, margin = 16.dp)
+                                                        },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                ) {
+                                                    Text("Начать", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    @Composable
+                                    fun StatusCard(
+                                        title: String,
+                                        isEnabled: Boolean,
+                                        modifier: Modifier = Modifier
+                                    ) {
+                                        Card(
+                                            shape = RoundedCornerShape(16.dp),
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                            modifier = modifier
+                                                .fillMaxWidth()
+                                                .padding(8.dp)
+                                            @Composable
+                                            fun StatusCard(
+                                                title: String,
+                                                isEnabled: Boolean,
+                                                modifier: Modifier = Modifier
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    modifier = Modifier.padding(16.dp)
+                                                            Card(
+                                                            shape = RoundedCornerShape(16.dp),
+                                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                                    modifier = modifier
+                                                        .fillMaxWidth()
+                                                        .padding(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = title,
+                                                        fontSize = 18.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF333333)
+                                                    )
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        modifier = Modifier.padding(16.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = title,
+                                                            fontSize = 18.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF333333)
+                                                        )
+
+                                                        Icon(
+                                                            imageVector = if (isEnabled) Icons.Filled.CheckCircle else Icons.Filled.Close ,
+                                                            contentDescription = if (isEnabled) "Включено" else "Выключено",
+                                                            tint = if (isEnabled) Color(0xFF4CAF50) else Color(0xFFFF5722), // зелёный или красный цвет
+                                                            modifier = Modifier.size(24.dp)
+                                                        )
+                                                        Icon(
+                                                            imageVector = if (isEnabled) Icons.Filled.CheckCircle else Icons.Filled.Close ,
+                                                            contentDescription = if (isEnabled) "Включено" else "Выключено",
+                                                            tint = if (isEnabled) Color(0xFF4CAF50) else Color(0xFFFF5722), // зелёный или красный цвет
+                                                            modifier = Modifier.size(24.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                    }
+
+                                    @Composable
+                                    fun MapScreen_Backend(modifier: Modifier = Modifier, userLocation: GeoPoint?) {
+                                        AndroidView(
+                                            factory = { context ->
+                                                MapView(context).apply {
+                                                    controller.setZoom(15.0)
+                                                    setMultiTouchControls(true)
+                                                    // Используем post, чтобы изменения применялись после полной инициализации
+                                                    post {
+                                                        if (userLocation != null) {
+                                                            // Проверяем и задаем центр на местоположение пользователя
+                                                            controller.setCenter(userLocation)
+                                                            val marker = Marker(this).apply {
+                                                                position = userLocation
+                                                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                                                title = "Вы здесь"
+                                                            }
+                                                            overlays.add(marker)
+                                                        } else {
+                                                            // Координаты центра Днепра, Украина (широта и долгота)
+                                                            val defaultLocation = GeoPoint(48.4647, 35.0462)
+                                                            controller.setCenter(defaultLocation)
+                                                            val marker = Marker(this).apply {
+                                                                position = defaultLocation
+                                                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                                                title = "Днепр, Украина (по умолчанию)"
+                                                            }
+                                                            overlays.add(marker)
+                                                        }
+                                                        // Обновляем карту принудительно
+                                                        invalidate()
+                                                    }
+                                                }
+                                            },
+                                            modifier = modifier.fillMaxSize()
+                                        )
+                                    }
+                                    @Preview(showBackground = true)
+
+                                    @Composable
+                                    fun AppContentPreview()
+                                    {
+                                        val context = LocalContext.current
+                                        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+
+                                        @Preview(showBackground = true)
+                                        @Composable
+                                        fun AppContentPreview() {
+                                            val context = LocalContext.current
+                                            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+                                            MyApplicationTheme {
+                                                AppContent(
+                                                    fusedLocationClient = fusedLocationClient,
+                                                    isInternetEnabled = true // Задаём значение для предварительного просмотра
+                                                )
+                                            }
+                                        }
+                                        MyApplicationTheme {
+                                            AppContent(
+                                                fusedLocationClient = fusedLocationClient,
+                                                isInternetEnabled = true // Задаём значение для предварительного просмотра
+                                            )
+                                        }
+                                    }
