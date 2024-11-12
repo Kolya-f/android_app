@@ -1,5 +1,10 @@
 package com.example.myapplication
 
+
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.compose.runtime.*
 import android.Manifest
 import android.util.Log
 import android.os.Looper
@@ -17,7 +22,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,7 +60,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
 import com.google.android.gms.location.LocationRequest
 import com.google.firebase.FirebaseApp
-import android.provider.Settings
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.ConnectionResult
@@ -75,9 +78,15 @@ class MainActivity : ComponentActivity() {
     private val db: FirebaseFirestore = Firebase.firestore
     private var isInternetEnabled by mutableStateOf(false)
     private var isNetworkCallbackRegistered = false
+    private lateinit var locationCallback: com.google.android.gms.location.LocationCallback
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Состояние для хранения введенного имени пользователя
+        var userName by mutableStateOf("")
+
+        // Инициализация Firebase
         FirebaseApp.initializeApp(this)
         Log.d("MainActivity", "Firebase успешно инициализирован")
 
@@ -90,6 +99,7 @@ class MainActivity : ComponentActivity() {
             Log.e("MainActivity", "Google Play Services недоступны или не обновлены")
         }
 
+        // Инициализация клиента местоположения
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         Log.d("MainActivity", "FusedLocationProviderClient инициализирован")
 
@@ -127,7 +137,9 @@ class MainActivity : ComponentActivity() {
         // Проверка разрешений
         if (checkLocationPermission()) {
             Log.d("MainActivity", "Разрешение на местоположение уже есть")
-            startLocationUpdates()
+            // Создаем и запускаем locationCallback с userName
+            locationCallback = createLocationCallback(userName)
+            startLocationUpdates(userName)
         } else {
             Log.d("MainActivity", "Запрос разрешения на местоположение")
             requestLocationPermission()
@@ -152,7 +164,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
     }
 
     private fun updateNetworkStatus(isConnected: Boolean) {
@@ -175,98 +186,97 @@ class MainActivity : ComponentActivity() {
         Log.d("MainActivity", "Запрос разрешения на доступ к местоположению")
     }
 
-    @SuppressLint("MissingPermission")
-    private fun startLocationUpdates() {
+    // Запуск обновлений местоположения с userName
+    fun startLocationUpdates(userName: String) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // Если разрешение отсутствует, запросите его у пользователя
+            requestLocationPermission()
+            return
+        }
+
         val locationRequest = LocationRequest.create().apply {
             interval = 6000L
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
-        if (checkLocationPermission()) {
-            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-            Log.d("MainActivity", "Начато обновление местоположения")
-        } else {
-            Log.w("MainActivity", "Отсутствует разрешение на местоположение, обновление не начато")
-        }
+        // Создаем новый коллбэк, передавая userName
+        locationCallback = createLocationCallback(userName)
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+        Log.d("MainActivity", "Начато обновление местоположения для пользователя: $userName")
     }
 
-    private fun sendLocationToFirestore() {
-        Log.d("Firestore", "Отправка данных о местоположении в Firestore")
 
-        if (checkLocationPermission()) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    val locationData = hashMapOf(
-                        "latitude" to location.latitude,
-                        "longitude" to location.longitude,
-                        "timestamp" to System.currentTimeMillis()
-                    )
-                    val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-                    db.collection("locations").document(deviceId).set(locationData)
-                        .addOnSuccessListener { Log.d("Firestore", "Данные местоположения успешно отправлены") }
-                        .addOnFailureListener { e -> Log.e("Firestore", "Ошибка отправки данных местоположения", e) }
-                } else {
-                    Log.w("Firestore", "Местоположение не получено")
+
+    private fun createLocationCallback(userName: String): com.google.android.gms.location.LocationCallback {
+        return object : com.google.android.gms.location.LocationCallback() {
+            override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
+                locationResult.lastLocation?.let {
+                    Log.d("LocationCallback", "Новое местоположение: ${it.latitude}, ${it.longitude}")
+                    sendLocationToFirestore(it.latitude, it.longitude, userName) // Передаем имя пользователя
                 }
-            }.addOnFailureListener { e ->
-                Log.e("Firestore", "Ошибка при получении местоположения", e)
             }
-        } else {
-            Log.w("Firestore", "Отсутствует разрешение на доступ к местоположению, данные не отправлены")
         }
     }
 
-    private val locationCallback = object : com.google.android.gms.location.LocationCallback() {
-        override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
-            locationResult.lastLocation?.let {
-                Log.d("LocationCallback", "Новое местоположение: ${it.latitude}, ${it.longitude}")
-                sendLocationToFirestore()
-            }
+    // Функция для отправки местоположения в Firestore
+    private fun sendLocationToFirestore(latitude: Double, longitude: Double, userName: String) {
+        if (userName.isBlank()) {
+            Log.e("Firestore", "Имя пользователя пустое. Данные местоположения не отправлены.")
+            return
         }
+        val locationData = hashMapOf(
+            "latitude" to latitude,
+            "longitude" to longitude,
+            "timestamp" to System.currentTimeMillis()
+        )
+
+        db.collection("locations").document(userName).set(locationData)
+            .addOnSuccessListener { Log.d("Firestore", "Данные местоположения успешно отправлены") }
+            .addOnFailureListener { e -> Log.e("Firestore", "Ошибка отправки данных местоположения", e) }
     }
+
 
     private fun loadAllLocationsFromFirestore() {
-        Log.d("Firestore", "Начало загрузки данных о местоположении из Firestore")
-
         db.collection("locations").addSnapshotListener { snapshots, e ->
             if (e != null) {
                 Log.w("Firestore", "Ошибка получения данных из Firestore", e)
                 return@addSnapshotListener
             }
 
+            // Проверка, что данные были получены
             snapshots?.let {
-                Log.d("Firestore", "Обновление местоположений с Firestore")
-
-                // Очищаем старые маркеры перед добавлением новых
-                mapView.overlays.clear()
+                mapView.overlays.clear() // Очищаем карту перед добавлением новых маркеров
 
                 for (document in snapshots) {
                     val latitude = document.getDouble("latitude")
                     val longitude = document.getDouble("longitude")
+                    val deviceUserName = document.id // Имя пользователя из ID документа
+
                     if (latitude != null && longitude != null) {
                         val geoPoint = GeoPoint(latitude, longitude)
-                        addMarkerToMap(geoPoint, document.id)
+                        addMarkerToMap(geoPoint, deviceUserName) // Добавляем маркер с именем пользователя
                     }
                 }
-                mapView.invalidate()  // Обновление карты для отображения новых маркеров
+
+                mapView.invalidate() // Принудительно обновляем карту после добавления всех маркеров
             }
         }
     }
 
-    private fun addMarkerToMap(geoPoint: GeoPoint, deviceId: String) {
+
+    private fun addMarkerToMap(geoPoint: GeoPoint, userName: String) {
         val marker = Marker(mapView).apply {
             position = geoPoint
-            title = "Device: $deviceId"
+            title = userName
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
         }
-        mapView.overlays.add(marker)
-        Log.d("Map", "Добавлен маркер для устройства $deviceId на карте")
+        mapView.overlays.add(marker) // Добавляем маркер на карту
+        Log.d("Map", "Добавлен маркер для пользователя $userName на карте")
     }
+
 
     override fun onDestroy() {
         super.onDestroy()
-
-        // Проверка, был ли зарегистрирован NetworkCallback перед его отменой
         if (isNetworkCallbackRegistered) {
             try {
                 connectivityManager.unregisterNetworkCallback(networkCallback)
@@ -289,12 +299,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-fun isLocationServiceEnabled(context: android.content.Context): Boolean {
-    val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
-    return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-}
-
 @Composable
 fun AppContent_backend(
     modifier: Modifier = Modifier,
@@ -303,11 +307,39 @@ fun AppContent_backend(
 ) {
     var showMap by remember { mutableStateOf(false) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    var userName by remember { mutableStateOf("") } // Поле для хранения имени пользователя
     val context = LocalContext.current
 
-    // Проверка состояния службы местоположения
-    val isLocationEnabled = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
-            isLocationServiceEnabled(context)
+    // Состояние для отслеживания доступности местоположения
+    var isLocationEnabled by remember {
+        mutableStateOf(
+            ActivityCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(context)
+        )
+    }
+
+    // Обновление состояния местоположения при его изменении
+    DisposableEffect(context) {
+        val locationStatusReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                isLocationEnabled = ActivityCompat.checkSelfPermission(
+                    ctx ?: return, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(ctx)
+            }
+        }
+
+        // Регистрация BroadcastReceiver для прослушивания изменений состояния службы местоположения
+        context.applicationContext.registerReceiver(
+            locationStatusReceiver,
+            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
+        )
+
+        // Отмена регистрации при выходе из эффекта
+        onDispose {
+            context.applicationContext.unregisterReceiver(locationStatusReceiver)
+        }
+    }
 
     // Лаунчер для запроса разрешений
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -323,30 +355,57 @@ fun AppContent_backend(
         }
     }
 
-    // Обработка нажатия кнопки
+    // Обработка нажатия кнопки с передачей userName в startLocationUpdates
     val onButtonClick: () -> Unit = {
-        if (isLocationEnabled) {
+        if (userName.isNotBlank()) { // Проверяем, введено ли имя пользователя
+            // Вызываем startLocationUpdates с userName для обновлений местоположения
+            (context as MainActivity).startLocationUpdates(userName)
             getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
                 userLocation = location
                 showMap = true  // Переход к карте после получения местоположения
             }
         } else {
-            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            Toast.makeText(context, "Пожалуйста, введите ваше имя", Toast.LENGTH_SHORT).show()
         }
     }
 
+    // Условие для отображения карты или начального экрана
     if (showMap && userLocation != null) {
-        // Переход на экран карты после получения местоположения
-        MapScreen_Backend(modifier, userLocation)
+        MapScreen_Backend(modifier, userLocation, userName) // Передаем userName для отображения на карте
     } else {
-        // Начальный экран с кнопкой и индикаторами
-        ButtonInterface(
-            onButtonClick = onButtonClick,
-            isLocationEnabled = isLocationEnabled,
-            isInternetEnabled = isInternetEnabled,
+        Column(
             modifier = modifier
-        )
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Поле ввода имени пользователя
+            TextField(
+                value = userName,
+                onValueChange = { userName = it },
+                label = { Text("Введите ваше имя") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            )
+
+            // Кнопка для продолжения
+            ButtonInterface(
+                onButtonClick = onButtonClick,
+                isLocationEnabled = isLocationEnabled,
+                isInternetEnabled = isInternetEnabled,
+                modifier = modifier
+            )
+        }
     }
+}
+
+// Проверка, включены ли службы местоположения на устройстве
+fun isLocationServiceEnabled(context: Context): Boolean {
+    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 }
 
 // Функция для получения и сохранения местоположения
@@ -409,41 +468,28 @@ private fun getSavedLocation(sharedPreferences: SharedPreferences): GeoPoint? {
 
 // Экран карты с загрузкой маркеров всех устройств из Firestore
 @Composable
-fun MapScreen_Backend(modifier: Modifier, userLocation: GeoPoint?) {
+fun MapScreen_Backend(
+    modifier: Modifier = Modifier,
+    userLocation: GeoPoint?,
+    userName: String // Добавлен параметр для имени пользователя
+) {
     AndroidView(
         factory = { context ->
             MapView(context).apply {
                 controller.setZoom(15.0)
                 setMultiTouchControls(true)
+
                 post {
-                    // Центр карты на текущем местоположении пользователя
-                    userLocation?.let { geoPoint ->
-                        controller.setCenter(geoPoint)
+                    if (userLocation != null) {
+                        controller.setCenter(userLocation)
                         val marker = Marker(this).apply {
-                            position = geoPoint
-                            title = "Вы здесь"
+                            position = userLocation
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            title = userName // Отображение введенного имени пользователя
                         }
                         overlays.add(marker)
                     }
-
-                    // Подгружаем все местоположения из Firestore
-                    val db = Firebase.firestore
-                    db.collection("locations")
-                        .get()
-                        .addOnSuccessListener { documents ->
-                            for (document in documents) {
-                                val latitude = document.getDouble("latitude")
-                                val longitude = document.getDouble("longitude")
-                                if (latitude != null && longitude != null) {
-                                    val deviceMarker = Marker(this).apply {
-                                        position = GeoPoint(latitude, longitude)
-                                        title = "Device: ${document.id}"  // Устанавливаем ID устройства
-                                    }
-                                    overlays.add(deviceMarker)
-                                }
-                            }
-                            invalidate()  // Обновляем карту для отображения маркеров
-                        }
+                    invalidate()
                 }
             }
         },

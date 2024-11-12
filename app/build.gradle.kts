@@ -53,33 +53,31 @@ android {
     }
 }
 dependencies {
-    // Firebase BOM (Bill of Materials) для управления версиями
+    // Основные AndroidX зависимости
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+
+    // Firebase BOM для управления версиями
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-
-    implementation("com.google.android.gms:play-services-base:18.5.0")
-
-    // Firebase зависимости
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
-    implementation("com.google.firebase:firebase-auth-ktx") // Если используется аутентификация
-    implementation("com.google.firebase:firebase-database-ktx") // Если используется Firebase Database
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-database-ktx")
 
-    // OSMDroid для карт
+    // Google Play Services
+    implementation("com.google.android.gms:play-services-base:18.5.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    // OSMDroid для работы с картами
     implementation("org.osmdroid:osmdroid-android:6.1.11")
     implementation("org.osmdroid:osmdroid-mapsforge:6.1.11")
 
-    // Google Play Services для работы с местоположением
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-
     // Jetpack Compose зависимости
     implementation("androidx.activity:activity-compose:1.5.1")
-    implementation("androidx.compose.ui:ui:1.7.5") // Последняя версия
+    implementation("androidx.compose.ui:ui:1.7.5")
     implementation("androidx.compose.material3:material3:1.3.1")
     implementation("androidx.compose.runtime:runtime-livedata:1.7.5")
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.5")
-
-    implementation("com.google.android.gms:play-services-base:18.1.0")
-
 
     // ConstraintLayout для Compose
     implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
@@ -96,8 +94,4 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.5")
-
-    // Основные AndroidX зависимости
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 }
