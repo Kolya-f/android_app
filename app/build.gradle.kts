@@ -79,6 +79,7 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata:1.7.5")
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.5")
 
+    implementation("androidx.compose.material:material:1.7.5")
     // ConstraintLayout для Compose
     implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
 
