@@ -62,8 +62,11 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import android.content.SharedPreferences
 import android.location.LocationManager
 
+
 val LightBlue = Color(0xFFADD8E6)
 
+// Глобальная переменная для маркера текущего пользователя
+private var userMarker: Marker? = null
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -81,6 +84,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Log.d("MainActivity", "onCreate вызван")
 
+        // Инициализация connectivityManager перед использованием
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        // Инициализация networkCallback перед регистрацией
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                updateNetworkStatus(true)
+                Log.d("NetworkCallback", "Сеть доступна")
+            }
+
+            override fun onLost(network: Network) {
+                updateNetworkStatus(false)
+                Log.d("NetworkCallback", "Сеть потеряна")
+            }
+        }
+
+        // Регистрируем сетевой callback
+        connectivityManager.registerDefaultNetworkCallback(networkCallback)
+        isNetworkCallbackRegistered = true
+
         // Получаем новое имя пользователя из Intent или сохраняем "Гость"
         intent.getStringExtra("USER_NAME")?.let { inputName ->
             if (inputName.isNotBlank() && inputName != userName) {
@@ -91,10 +114,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        FirebaseApp.initializeApp(this)  // Инициализация Firebase
+        FirebaseApp.initializeApp(this) // Инициализация Firebase
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this) // Инициализация местоположения
-        setupOSMDroid()  // Настройка карты osmdroid
-        setupNetworkCallback()  // Настройка сетевого подключения
+        setupOSMDroid() // Настройка карты osmdroid
 
         mapView = MapView(this).apply {
             setTileSource(TileSourceFactory.MAPNIK)
@@ -183,24 +205,25 @@ class MainActivity : ComponentActivity() {
 
         // Запрос местоположения с интервалом 1000 мс (1 секунда)
         val locationRequest = LocationRequest.create().apply {
-            interval = 1000L
-            fastestInterval = 1000L
+            interval = 5000L // 5 секунд
+            fastestInterval = 3000L // 3 секунды, чтобы не было слишком частых обновлений
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
+
 
         locationCallback = createLocationCallback(userName)
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
         Log.d("StartLocationUpdates", "Запрос обновлений местоположения с интервалом 1 секунда отправлен")
     }
 
-
+    // Функция обратного вызова для получения обновлений местоположения
     private fun createLocationCallback(userName: String): com.google.android.gms.location.LocationCallback {
         return object : com.google.android.gms.location.LocationCallback() {
             override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
                 locationResult.lastLocation?.let { location ->
                     Log.d("LocationCallback", "Новое местоположение: ${location.latitude}, ${location.longitude}")
 
-                    // Обновляем маркер пользователя на карте
+                    // Обновляем или создаем маркер пользователя на карте
                     updateMarkerOnMap(location.latitude, location.longitude, userName)
 
                     // Отправляем данные местоположения в Firestore
@@ -210,34 +233,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Обновление маркера на карте
     private fun updateMarkerOnMap(latitude: Double, longitude: Double, userName: String) {
         val geoPoint = GeoPoint(latitude, longitude)
 
-        // Ищем существующий маркер для пользователя
-        val existingMarker = mapView.overlays.filterIsInstance<Marker>().find { it.title == userName }
-
-        if (existingMarker != null) {
-            // Если маркер уже существует, обновляем его местоположение
-            existingMarker.position = geoPoint
-            mapView.invalidate() // Перерисовываем карту
+        // Если маркер пользователя уже существует, обновляем его положение
+        if (userMarker != null) {
+            userMarker?.position = geoPoint
         } else {
-            // Если маркера нет, создаем новый
-            val marker = Marker(mapView).apply {
+            // Если маркера еще нет, создаем новый маркер и добавляем на карту
+            userMarker = Marker(mapView).apply {
                 position = geoPoint
                 title = userName
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             }
-            mapView.overlays.add(marker)
-            mapView.invalidate()
+            mapView.overlays.add(userMarker)
         }
+
+        // Обновляем карту для отображения изменений
+        mapView.invalidate()
     }
 
-
-
+    // Функция отправки данных местоположения в Firestore
     private fun sendLocationToFirestore(latitude: Double, longitude: Double, userName: String) {
-        Log.d("sendLocationToFirestore", "Попытка отправки данных для пользователя: $userName")
-
-        // Проверяем, что имя пользователя не пустое и не равно "Гость"
         if (userName.isBlank() || userName == "Гость") {
             Log.e("sendLocationToFirestore", "Некорректное имя пользователя. Данные местоположения не отправлены.")
             return
@@ -258,7 +276,7 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-
+    // Загрузка всех местоположений из Firestore и добавление маркеров на карту
     private fun loadAllLocationsFromFirestore() {
         db.collection("locations").addSnapshotListener { snapshots, e ->
             if (e != null) {
@@ -266,22 +284,27 @@ class MainActivity : ComponentActivity() {
                 return@addSnapshotListener
             }
 
-            mapView.overlays.clear()
+            mapView.overlays.clear()  // Очищаем карту
 
-            for (document in snapshots!!) {
+            // Добавляем маркер пользователя снова, если он уже создан
+            userMarker?.let { mapView.overlays.add(it) }
+
+            // Добавляем маркеры других пользователей
+            snapshots?.forEach { document ->
                 val latitude = document.getDouble("latitude")
                 val longitude = document.getDouble("longitude")
                 val deviceName = document.id
 
                 if (latitude != null && longitude != null) {
-                    val geoPoint = GeoPoint(latitude, longitude)
-                    addMarkerToMap(geoPoint, deviceName)
+                    addMarkerToMap(GeoPoint(latitude, longitude), deviceName)
                 }
             }
-            mapView.invalidate()
+
+            mapView.invalidate()  // Обновляем карту
         }
     }
 
+    // Добавление маркера на карту для других пользователей
     private fun addMarkerToMap(geoPoint: GeoPoint, userName: String) {
         val marker = Marker(mapView).apply {
             position = geoPoint
@@ -293,25 +316,38 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        isFinishingManually = true
         Log.d("MainActivity", "onDestroy вызван, удаляем данные пользователя $userName")
-        removeUserData(userName)
 
+        // Удаляем данные пользователя из базы данных, если имя пользователя указано
+        userName?.let {
+            removeUserData(it) // Передаем userName в removeUserData
+        } ?: Log.e("onDestroy", "Ошибка: userName отсутствует при onDestroy")
+
+        // Проверяем, был ли зарегистрирован NetworkCallback, перед его отменой
         if (isNetworkCallbackRegistered) {
-            connectivityManager.unregisterNetworkCallback(networkCallback)
-            isNetworkCallbackRegistered = false
+            try {
+                connectivityManager.unregisterNetworkCallback(networkCallback)
+                isNetworkCallbackRegistered = false
+                Log.d("MainActivity", "NetworkCallback успешно отменен в onDestroy")
+            } catch (e: IllegalArgumentException) {
+                Log.e("MainActivity", "Ошибка при отмене NetworkCallback: он не был зарегистрирован", e)
+            }
         }
 
+        // Остановка обновлений местоположения
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        Log.d("MainActivity", "Обновления местоположения успешно остановлены")
     }
 
     override fun onStop() {
         super.onStop()
+        Log.d("MainActivity", "onStop вызван")
+
+        // Проверка и удаление данных пользователя, если активность завершается не вручную
         if (!isFinishingManually) {
-            userName.let {
-                removeUserData(it)
-                Log.d("MainActivity", "Данные для пользователя $it удалены при onStop")
-            }
+            userName?.let {
+                removeUserData(it) // Передаем userName в removeUserData
+            } ?: Log.e("onStop", "Ошибка: userName отсутствует при onStop")
         }
     }
 
@@ -455,6 +491,39 @@ fun MapScreen_Backend(
 }
 
 @Composable
+fun NicknameDialog(
+    currentName: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var nickname by remember { mutableStateOf(currentName) } // Используем текущее имя как начальное значение
+
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = { Text(text = "Введите ваше имя") },
+        text = {
+            TextField(
+                value = nickname,
+                onValueChange = { nickname = it },
+                label = { Text("Имя") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(nickname) }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            Button(onClick = { onDismiss() }) {
+                Text("Отмена")
+            }
+        }
+    )
+}
+
+
+@Composable
 fun AppContent_backend(
     modifier: Modifier = Modifier,
     fusedLocationClient: FusedLocationProviderClient,
@@ -463,8 +532,19 @@ fun AppContent_backend(
 ) {
     var showMap by remember { mutableStateOf(false) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
-    var userName by remember { mutableStateOf("") } // Поле для хранения имени пользователя
     val context = LocalContext.current
+
+    // Получаем SharedPreferences для хранения имени пользователя
+    val preferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    var userName by remember { mutableStateOf(preferences.getString("user_name", "") ?: "") }
+    var isDialogOpen by remember { mutableStateOf(userName.isBlank()) } // Открываем диалог, если имени нет
+
+    // Функция для сохранения никнейма
+    fun saveUserName(name: String) {
+        preferences.edit().putString("user_name", name).apply()
+        userName = name
+        onUserNameChange(name)
+    }
 
     // Состояние для отслеживания доступности местоположения
     var isLocationEnabled by remember {
@@ -484,14 +564,10 @@ fun AppContent_backend(
                 ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(ctx)
             }
         }
-
-        // Регистрация BroadcastReceiver для прослушивания изменений состояния службы местоположения
         context.applicationContext.registerReceiver(
             locationStatusReceiver,
             IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
         )
-
-        // Отмена регистрации при выходе из эффекта
         onDispose {
             context.applicationContext.unregisterReceiver(locationStatusReceiver)
         }
@@ -504,30 +580,42 @@ fun AppContent_backend(
         if (isGranted) {
             getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
                 userLocation = location
-                showMap = true  // Переход к отображению карты
+                showMap = true
             }
         } else {
             Toast.makeText(context, "Доступ к местоположению отклонен", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Обработка нажатия кнопки с передачей userName в startLocationUpdates
+    // Обработка нажатия кнопки
     val onButtonClick: () -> Unit = {
-        if (userName.isNotBlank()) { // Проверяем, введено ли имя пользователя
-            onUserNameChange(userName) // Передаем userName обратно в MainActivity
+        if (userName.isNotBlank()) {
+            saveUserName(userName) // Сохраняем имя
             (context as MainActivity).startLocationUpdates(userName)
             getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
                 userLocation = location
-                showMap = true  // Переход к карте после получения местоположения
+                showMap = true
             }
         } else {
             Toast.makeText(context, "Пожалуйста, введите ваше имя", Toast.LENGTH_SHORT).show()
         }
     }
 
+    // Отображение диалога для ввода никнейма при первом запуске
+    if (isDialogOpen) {
+        NicknameDialog(
+            currentName = userName,
+            onConfirm = { name ->
+                saveUserName(name)
+                isDialogOpen = false
+            },
+            onDismiss = { isDialogOpen = false }
+        )
+    }
+
     // Условие для отображения карты или начального экрана
     if (showMap && userLocation != null) {
-        MapScreen_Backend(modifier, userLocation, userName) // Передаем userName для отображения на карте
+        MapScreen_Backend(modifier, userLocation, userName)
     } else {
         Column(
             modifier = modifier
@@ -539,10 +627,7 @@ fun AppContent_backend(
             // Поле ввода имени пользователя
             TextField(
                 value = userName,
-                onValueChange = {
-                    userName = it
-                    onUserNameChange(it) // Передаем обновленное имя пользователя обратно в MainActivity
-                },
+                onValueChange = { userName = it },
                 label = { Text("Введите ваше имя") },
                 modifier = Modifier
                     .fillMaxWidth()

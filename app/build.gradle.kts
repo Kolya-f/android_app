@@ -79,9 +79,20 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata:1.7.5")
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.5")
 
+    implementation(platform("androidx.compose:compose-bom:2024.11.00"))
     implementation("androidx.compose.material:material:1.7.5")
+    implementation("androidx.compose.material3:material3")
     // ConstraintLayout для Compose
     implementation("androidx.constraintlayout:constraintlayout-compose:1.1.0")
+
+    // Core Compose libraries
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.runtime:runtime")
+
+    // Activity Compose for integration with the Android framework
+    implementation("androidx.activity:activity-compose:1.7.2")
 
     // Зависимость для работы с настройками
     implementation("androidx.preference:preference-ktx:1.2.1")
