@@ -1,5 +1,7 @@
 package com.example.myapplication
 
+import kotlinx.coroutines.delay
+import androidx.compose.animation.core.*
 import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
@@ -438,55 +440,66 @@ private fun getSavedLocation(sharedPreferences: SharedPreferences): GeoPoint? {
 fun MapScreen_Backend(
     modifier: Modifier = Modifier,
     userLocation: GeoPoint?,
-    userName: String // Добавлен параметр для имени пользователя
+    userName: String
 ) {
+    var lastKnownLocation by remember { mutableStateOf(userLocation) }
+    var isBlinking by remember { mutableStateOf(false) } // Флаг для включения мигания
+
+    // Анимация мигания маркера
+    val infiniteTransition = rememberInfiniteTransition(label = "BlinkingTransition")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "BlinkAlpha"
+    )
+
+    // Запускаем таймер на три секунды, после чего включаем мигание
+    LaunchedEffect(Unit) {
+        delay(3000) // Ждём три секунды
+        isBlinking = true // Включаем мигание после задержки
+    }
+
     AndroidView(
         factory = { context ->
             MapView(context).apply {
                 controller.setZoom(15.0)
                 setMultiTouchControls(true)
-
-                post {
-                    // Центрируем карту на текущем местоположении пользователя
-                    userLocation?.let { geoPoint ->
-                        controller.setCenter(geoPoint)
-                        val userMarker = Marker(this).apply {
-                            position = geoPoint
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            title = userName  // Отображение имени текущего пользователя
-                        }
-                        overlays.add(userMarker)
-                    }
-
-                    // Подгружаем все местоположения из Firestore и добавляем маркеры для других устройств
-                    val db = Firebase.firestore
-                    db.collection("locations")
-                        .get()
-                        .addOnSuccessListener { documents ->
-                            for (document in documents) {
-                                val latitude = document.getDouble("latitude")
-                                val longitude = document.getDouble("longitude")
-                                val deviceName = document.id  // Используем ID документа как имя устройства
-
-                                // Если местоположение успешно получено, добавляем маркер
-                                if (latitude != null && longitude != null) {
-                                    val deviceMarker = Marker(this).apply {
-                                        position = GeoPoint(latitude, longitude)
-                                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                        title = "Device: $deviceName"  // Устанавливаем ID устройства как заголовок
-                                    }
-                                    overlays.add(deviceMarker)
-                                }
-                            }
-                            invalidate()  // Обновляем карту для отображения новых маркеров
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("MapScreen_Backend", "Ошибка загрузки данных из Firestore: ${e.message}")
-                        }
-                }
+                controller.setCenter(userLocation)
             }
         },
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize(),
+        update = { mapView ->
+            // Проверяем, изменилось ли местоположение
+            if (userLocation != null && userLocation != lastKnownLocation) {
+                lastKnownLocation = userLocation
+                mapView.overlays.clear()
+
+                // Создаем маркер
+                val userMarker = Marker(mapView).apply {
+                    position = userLocation
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    title = userName
+                }
+                mapView.overlays.add(userMarker)
+                mapView.invalidate()
+            }
+
+            // Применяем мигание к маркеру, если прошло три секунды
+            mapView.overlays.forEach { overlay ->
+                if (overlay is Marker) {
+                    if (isBlinking) {
+                        overlay.icon?.setAlpha((alpha * 255).toInt())
+                    } else {
+                        // В течение первых трёх секунд маркер остаётся обычным
+                        overlay.icon?.setAlpha(255)
+                    }
+                }
+            }
+        }
     )
 }
 
