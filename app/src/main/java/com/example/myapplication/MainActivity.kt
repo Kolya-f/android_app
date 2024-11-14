@@ -1,5 +1,9 @@
 package com.example.myapplication
 
+
+import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.firestore.ktx.firestore
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.*
 import android.content.BroadcastReceiver
@@ -26,11 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.shadow
 import androidx.core.app.ActivityCompat
@@ -53,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import com.google.firebase.firestore.ktx.firestore
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import com.google.firebase.firestore.FirebaseFirestore
@@ -278,43 +279,51 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    // Загрузка всех местоположений из Firestore и добавление маркеров на карту
     private fun loadAllLocationsFromFirestore() {
+        Log.d("Firestore", "Загрузка всех актуальных маркеров из Firestore")
+
         db.collection("locations").addSnapshotListener { snapshots, e ->
             if (e != null) {
                 Log.w("Firestore", "Ошибка получения данных из Firestore", e)
                 return@addSnapshotListener
             }
 
-            mapView.overlays.clear()  // Очищаем карту
+            mapView.overlays.clear()  // Очищаем карту перед добавлением новых маркеров
 
-            // Добавляем маркер пользователя снова, если он уже создан
+            // Пересоздаем маркер текущего пользователя, если его местоположение известно
             userMarker?.let { mapView.overlays.add(it) }
 
-            // Добавляем маркеры других пользователей
             snapshots?.forEach { document ->
                 val latitude = document.getDouble("latitude")
                 val longitude = document.getDouble("longitude")
-                val deviceName = document.id
+                val identifier = document.id // Используем ID документа как идентификатор пользователя или устройства
 
                 if (latitude != null && longitude != null) {
-                    addMarkerToMap(GeoPoint(latitude, longitude), deviceName)
+                    val geoPoint = GeoPoint(latitude, longitude)
+                    Log.d("Firestore", "Найдено местоположение для $identifier: $latitude, $longitude")
+                    addMarkerToMap(geoPoint, identifier) // Передаем идентификатор и координаты
                 }
             }
 
-            mapView.invalidate()  // Обновляем карту
+            mapView.invalidate()  // Обновляем карту для отображения новых маркеров
         }
     }
 
-    // Добавление маркера на карту для других пользователей
-    private fun addMarkerToMap(geoPoint: GeoPoint, userName: String) {
+
+
+    // Функция добавления маркера на карту для конкретного пользователя
+    private fun addMarkerToMap(geoPoint: GeoPoint, identifier: String) {
+        Log.d("addMarkerToMap", "Добавление маркера для: $identifier с координатами: $geoPoint")
+
         val marker = Marker(mapView).apply {
             position = geoPoint
-            title = userName
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            title = identifier // Устанавливаем в качестве заголовка маркера имя пользователя или устройства
         }
         mapView.overlays.add(marker)
+        Log.d("Map", "Маркер добавлен на карту для: $identifier на координатах: ${geoPoint.latitude}, ${geoPoint.longitude}")
     }
+
 
     override fun onDestroy() {
         super.onDestroy()
@@ -434,18 +443,17 @@ private fun getSavedLocation(sharedPreferences: SharedPreferences): GeoPoint? {
     }
 }
 
-
-// Экран карты с загрузкой маркеров всех устройств из Firestore
 @Composable
 fun MapScreen_Backend(
     modifier: Modifier = Modifier,
     userLocation: GeoPoint?,
     userName: String
 ) {
-    var lastKnownLocation by remember { mutableStateOf(userLocation) }
-    var isBlinking by remember { mutableStateOf(false) } // Флаг для включения мигания
+    // Переменная для хранения единственного маркера пользователя
+    var userMarker: Marker? by remember { mutableStateOf(null) }
+    var isBlinking by remember { mutableStateOf(false) }
 
-    // Анимация мигания маркера
+    // Анимация мигания
     val infiniteTransition = rememberInfiniteTransition(label = "BlinkingTransition")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -457,51 +465,96 @@ fun MapScreen_Backend(
         label = "BlinkAlpha"
     )
 
-    // Запускаем таймер на три секунды, после чего включаем мигание
+    // Включение мигания через три секунды
     LaunchedEffect(Unit) {
-        delay(3000) // Ждём три секунды
-        isBlinking = true // Включаем мигание после задержки
+        delay(3000)
+        isBlinking = true
     }
+
+    // Управление маркерами других устройств
+    val deviceMarkers = mutableMapOf<String, Marker>()
 
     AndroidView(
         factory = { context ->
             MapView(context).apply {
                 controller.setZoom(15.0)
                 setMultiTouchControls(true)
-                controller.setCenter(userLocation)
+
+                post {
+                    // Инициализируем маркер пользователя
+                    userLocation?.let { geoPoint ->
+                        controller.setCenter(geoPoint)
+                        userMarker = addOrUpdateUserMarker(this, geoPoint, userName, alpha)
+                    }
+
+                    // Слушатель для загрузки и обновления маркеров других пользователей
+                    val db = Firebase.firestore
+                    db.collection("locations")
+                        .addSnapshotListener { snapshots, error ->
+                            if (error != null) {
+                                Log.e("MapScreen_Backend", "Ошибка загрузки данных из Firestore: ${error.message}")
+                                return@addSnapshotListener
+                            }
+
+                            // Удаляем старые маркеры устройств и добавляем новые
+                            deviceMarkers.values.forEach { marker -> overlays.remove(marker) }
+                            deviceMarkers.clear()
+
+                            snapshots?.forEach { document ->
+                                val latitude = document.getDouble("latitude")
+                                val longitude = document.getDouble("longitude")
+                                val deviceName = document.id
+
+                                if (latitude != null && longitude != null) {
+                                    val geoPoint = GeoPoint(latitude, longitude)
+                                    val marker = addOrUpdateDeviceMarker(this, geoPoint, deviceName)
+                                    deviceMarkers[deviceName] = marker
+                                }
+                            }
+                            invalidate() // Обновляем карту
+                        }
+                }
             }
         },
         modifier = modifier.fillMaxSize(),
         update = { mapView ->
-            // Проверяем, изменилось ли местоположение
-            if (userLocation != null && userLocation != lastKnownLocation) {
-                lastKnownLocation = userLocation
-                mapView.overlays.clear()
-
-                // Создаем маркер
-                val userMarker = Marker(mapView).apply {
-                    position = userLocation
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    title = userName
-                }
-                mapView.overlays.add(userMarker)
-                mapView.invalidate()
-            }
-
-            // Применяем мигание к маркеру, если прошло три секунды
-            mapView.overlays.forEach { overlay ->
-                if (overlay is Marker) {
-                    if (isBlinking) {
-                        overlay.icon?.setAlpha((alpha * 255).toInt())
-                    } else {
-                        // В течение первых трёх секунд маркер остаётся обычным
-                        overlay.icon?.setAlpha(255)
-                    }
+            userLocation?.let { geoPoint ->
+                // Обновляем позицию маркера пользователя, если она изменилась
+                if (userMarker == null) {
+                    userMarker = addOrUpdateUserMarker(mapView, geoPoint, userName, alpha)
+                } else {
+                    userMarker?.position = geoPoint  // Меняем координаты, не создавая новый маркер
+                    mapView.invalidate()
                 }
             }
         }
     )
 }
+
+// Функция для добавления или обновления маркера пользователя с эффектом мигания
+private fun addOrUpdateUserMarker(mapView: MapView, geoPoint: GeoPoint, userName: String, alpha: Float): Marker {
+    val userMarker = Marker(mapView).apply {
+        position = geoPoint
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        title = userName
+        icon?.alpha = (alpha * 255).toInt()  // Применяем анимацию мигания
+    }
+    mapView.overlays.add(userMarker)
+    return userMarker  // Возвращаем маркер для отслеживания
+}
+
+// Функция для добавления или обновления маркера устройства
+private fun addOrUpdateDeviceMarker(mapView: MapView, geoPoint: GeoPoint, deviceName: String): Marker {
+    val deviceMarker = Marker(mapView).apply {
+        position = geoPoint
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        title = "Device: $deviceName"
+    }
+    mapView.overlays.add(deviceMarker)
+    Log.d("MapScreen_Backend", "Маркер для устройства $deviceName добавлен на карту.")
+    return deviceMarker
+}
+
 
 @Composable
 fun NicknameDialog(
