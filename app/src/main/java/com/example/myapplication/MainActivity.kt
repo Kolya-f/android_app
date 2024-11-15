@@ -206,14 +206,14 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        // Запрос местоположения с интервалом 1000 мс (1 секунда)
+        // Настройка запроса местоположения
         val locationRequest = LocationRequest.create().apply {
-            interval = 5000L // 5 секунд
-            fastestInterval = 3000L // 3 секунды, чтобы не было слишком частых обновлений
+            interval = 1000L
+            fastestInterval = 1000L
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
-
+        // Инициализация locationCallback перед использованием
         locationCallback = createLocationCallback(userName)
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
         Log.d("StartLocationUpdates", "Запрос обновлений местоположения с интервалом 1 секунда отправлен")
@@ -327,12 +327,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("MainActivity", "onDestroy вызван, удаляем данные пользователя $userName")
+        Log.d("MainActivity", "onDestroy вызван для удаления данных пользователя $userName")
 
-        // Удаляем данные пользователя из базы данных, если имя пользователя указано
-        userName?.let {
-            removeUserData(it) // Передаем userName в removeUserData
-        } ?: Log.e("onDestroy", "Ошибка: userName отсутствует при onDestroy")
+        // Удаляем данные пользователя
+        userName?.let { removeUserData(it) }
 
         // Проверяем, был ли зарегистрирован NetworkCallback, перед его отменой
         if (isNetworkCallbackRegistered) {
@@ -341,14 +339,21 @@ class MainActivity : ComponentActivity() {
                 isNetworkCallbackRegistered = false
                 Log.d("MainActivity", "NetworkCallback успешно отменен в onDestroy")
             } catch (e: IllegalArgumentException) {
-                Log.e("MainActivity", "Ошибка при отмене NetworkCallback: он не был зарегистрирован", e)
+                Log.e("MainActivity", "Ошибка при отмене NetworkCallback: NetworkCallback не был зарегистрирован", e)
             }
+        } else {
+            Log.d("MainActivity", "NetworkCallback не был зарегистрирован, пропускаем отмену")
         }
 
-        // Остановка обновлений местоположения
-        fusedLocationClient.removeLocationUpdates(locationCallback)
-        Log.d("MainActivity", "Обновления местоположения успешно остановлены")
+        // Проверяем, инициализирован ли locationCallback перед удалением обновлений местоположения
+        if (::locationCallback.isInitialized) {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+            Log.d("MainActivity", "Обновления местоположения успешно остановлены")
+        } else {
+            Log.w("MainActivity", "locationCallback не был инициализирован, пропускаем удаление обновлений местоположения")
+        }
     }
+
 
     override fun onStop() {
         super.onStop()
