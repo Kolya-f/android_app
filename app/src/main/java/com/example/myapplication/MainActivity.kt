@@ -68,8 +68,7 @@ import android.location.LocationManager
 
 val LightBlue = Color(0xFFADD8E6)
 
-// Глобальная переменная для маркера текущего пользователя
-private var userMarker: Marker? = null
+private var userMarker: Marker? = null // Глобальный маркер для пользователя
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -199,7 +198,10 @@ class MainActivity : ComponentActivity() {
 
     // Начало обновлений местоположения с userName
     fun startLocationUpdates(userName: String) {
-        Log.d("StartLocationUpdates", "Вошли в startLocationUpdates с userName = $userName")
+        if (userName.isBlank() || userName == "Гость") {
+            Log.e("StartLocationUpdates", "Некорректное имя пользователя, обновления местоположения не начаты")
+            return
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestLocationPermission()
@@ -213,11 +215,20 @@ class MainActivity : ComponentActivity() {
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
-        // Инициализация locationCallback перед использованием
         locationCallback = createLocationCallback(userName)
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-        Log.d("StartLocationUpdates", "Запрос обновлений местоположения с интервалом 1 секунда отправлен")
+        Log.d("StartLocationUpdates", "Запрос обновлений местоположения для пользователя $userName начат")
     }
+
+    private fun updateUserName(newUserName: String) {
+        if (newUserName.isNotBlank() && newUserName != userName) {
+            userName = newUserName.trim()
+            Log.d("updateUserName", "userName обновлен на: $userName")
+        } else {
+            Log.d("updateUserName", "userName остаётся неизменным: $userName")
+        }
+    }
+
 
     // Функция обратного вызова для получения обновлений местоположения
     private fun createLocationCallback(userName: String): com.google.android.gms.location.LocationCallback {
@@ -236,25 +247,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Обновление маркера на карте
     private fun updateMarkerOnMap(latitude: Double, longitude: Double, userName: String) {
         val geoPoint = GeoPoint(latitude, longitude)
 
-        // Если маркер пользователя уже существует, обновляем его положение
-        if (userMarker != null) {
-            userMarker?.position = geoPoint
-        } else {
-            // Если маркера еще нет, создаем новый маркер и добавляем на карту
+        // Проверяем, существует ли маркер для текущего пользователя
+        if (userMarker == null) {
             userMarker = Marker(mapView).apply {
                 position = geoPoint
                 title = userName
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             }
             mapView.overlays.add(userMarker)
+            Log.d("updateMarkerOnMap", "Создан новый маркер для пользователя $userName")
+        } else {
+            // Обновляем только координаты существующего маркера
+            userMarker?.apply {
+                position = geoPoint
+                title = userName
+            }
+            Log.d("updateMarkerOnMap", "Обновлено местоположение маркера для $userName")
         }
 
-        // Обновляем карту для отображения изменений
-        mapView.invalidate()
+        mapView.invalidate() // Перерисовываем карту
     }
 
     // Функция отправки данных местоположения в Firestore
@@ -329,30 +343,24 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         Log.d("MainActivity", "onDestroy вызван для удаления данных пользователя $userName")
 
-        // Удаляем данные пользователя
-        userName?.let { removeUserData(it) }
+        if (userName.isNotBlank() && userName != "Гость") {
+            removeUserData(userName)
+        }
 
-        // Проверяем, был ли зарегистрирован NetworkCallback, перед его отменой
         if (isNetworkCallbackRegistered) {
             try {
                 connectivityManager.unregisterNetworkCallback(networkCallback)
                 isNetworkCallbackRegistered = false
-                Log.d("MainActivity", "NetworkCallback успешно отменен в onDestroy")
             } catch (e: IllegalArgumentException) {
-                Log.e("MainActivity", "Ошибка при отмене NetworkCallback: NetworkCallback не был зарегистрирован", e)
+                Log.e("onDestroy", "Ошибка при отмене NetworkCallback: ${e.message}")
             }
-        } else {
-            Log.d("MainActivity", "NetworkCallback не был зарегистрирован, пропускаем отмену")
         }
 
-        // Проверяем, инициализирован ли locationCallback перед удалением обновлений местоположения
         if (::locationCallback.isInitialized) {
             fusedLocationClient.removeLocationUpdates(locationCallback)
-            Log.d("MainActivity", "Обновления местоположения успешно остановлены")
-        } else {
-            Log.w("MainActivity", "locationCallback не был инициализирован, пропускаем удаление обновлений местоположения")
         }
     }
+
 
 
     override fun onStop() {
