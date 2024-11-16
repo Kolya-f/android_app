@@ -82,6 +82,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var locationCallback: com.google.android.gms.location.LocationCallback
     private var userName: String = "Гость" // Начальное значение — "Гость"
     private var isFinishingManually = false  // Флаг для ручного завершения
+    private var isMarkerVisible by mutableStateOf(true)
+    private var userMarker: Marker? = null // Глобальный маркер для пользователя
+    private val otherMarkers = mutableMapOf<String, Marker>()
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,7 +130,11 @@ class MainActivity : ComponentActivity() {
             requestLocationPermission()
         }
 
-        loadAllLocationsFromFirestore()
+        // Передача текущего маркера пользователя (null, если он ещё не создан)
+        loadAllLocationsFromFirestore(userMarker)
+
+        isMarkerVisible = loadMarkerVisibility()
+        Log.d("MainActivity", "Загружено состояние isMarkerVisible: $isMarkerVisible")
 
         setContent {
             MyApplicationTheme {
@@ -134,14 +142,33 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     containerColor = LightBlue
                 ) { innerPadding ->
-                    AppContent_backend(
-                        modifier = Modifier.padding(innerPadding),
-                        fusedLocationClient = fusedLocationClient,
-                        isInternetEnabled = isInternetEnabled,
-                        onUserNameChange = { newUserName ->
-                            updateUserName(newUserName)
-                        }
-                    )
+                    Column {
+                        AppContent_backend(
+                            modifier = Modifier.padding(innerPadding),
+                            fusedLocationClient = fusedLocationClient,
+                            isInternetEnabled = isInternetEnabled,
+                            onUserNameChange = { newUserName ->
+                                updateUserName(newUserName)
+                            }
+                        )
+                        ButtonInterface(
+                            onButtonClick = {
+                                if (checkLocationPermission()) {
+                                    startLocationUpdates(userName)
+                                } else {
+                                    requestLocationPermission()
+                                }
+                            },
+                            isLocationEnabled = checkLocationPermission(),
+                            isInternetEnabled = isInternetEnabled,
+                            isMarkerVisible = isMarkerVisible,
+                            onMarkerVisibilityChange = { isChecked ->
+                                isMarkerVisible = isChecked
+                                saveMarkerVisibility(isChecked) // Сохраняем состояние чекбокса
+                                Log.d("MainActivity", "isMarkerVisible обновлен: $isMarkerVisible")
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -155,21 +182,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun setupNetworkCallback() {
-        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                updateNetworkStatus(true)
-            }
+    private fun saveMarkerVisibility(isVisible: Boolean) {
+        val preferences = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        preferences.edit().putBoolean("isMarkerVisible", isVisible).apply()
+    }
 
-            override fun onLost(network: Network) {
-                updateNetworkStatus(false)
-                Log.d("NetworkCallback", "Сеть потеряна, удаляем данные пользователя $userName")
-                removeUserData(userName)
-            }
-        }
-        connectivityManager.registerDefaultNetworkCallback(networkCallback)
-        isNetworkCallbackRegistered = true
+    private fun loadMarkerVisibility(): Boolean {
+        val preferences = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        return preferences.getBoolean("isMarkerVisible", true) // По умолчанию: true
     }
 
     private fun updateNetworkStatus(isConnected: Boolean) {
@@ -202,7 +222,7 @@ class MainActivity : ComponentActivity() {
 
         // Настройка запроса местоположения
         val locationRequest = LocationRequest.create().apply {
-            interval = 1500 // Интервал обновления в миллисекундах (5 секунд)
+            interval = 1000 // Интервал обновления в миллисекундах (5 секунд)
             fastestInterval = 1000 // Минимальный интервал между обновлениями (2 секунды)
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
@@ -230,18 +250,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Функция обратного вызова для получения обновлений местоположения
     private fun createLocationCallback(userName: String): com.google.android.gms.location.LocationCallback {
         return object : com.google.android.gms.location.LocationCallback() {
             override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
                 locationResult.lastLocation?.let { location ->
-                    Log.d("LocationCallback", "Новое местоположение: ${location.latitude}, ${location.longitude}")
-
-                    // Обновляем или создаем маркер пользователя на карте
-                    updateMarkerOnMap(location.latitude, location.longitude, userName)
-
-                    // Отправляем данные местоположения в Firestore
-                    sendLocationToFirestore(location.latitude, location.longitude, userName)
+                    if (isMarkerVisible) {
+                        // Обновляем маркер на карте
+                        updateMarkerOnMap(location.latitude, location.longitude, userName)
+                        sendLocationToFirestore(location.latitude, location.longitude, userName)
+                    } else {
+                        // Удаляем данные из Firestore и маркер, если видимость отключена
+                        removeUserData(userName)
+                        userMarker?.let {
+                            mapView.overlays.remove(it)
+                            userMarker = null
+                            mapView.invalidate()
+                            Log.d("LocationCallback", "Маркер пользователя удален с карты, так как isMarkerVisible = false")
+                        }
+                    }
                 }
             }
         }
@@ -275,7 +301,6 @@ class MainActivity : ComponentActivity() {
         Log.d("updateMarkerOnMap", "Добавлен новый маркер для пользователя $userName на координатах: $latitude, $longitude")
     }
 
-
     // Функция отправки данных местоположения в Firestore
     private fun sendLocationToFirestore(latitude: Double, longitude: Double, userName: String) {
         if (userName.isBlank() || userName == "Гость") {
@@ -298,27 +323,23 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun loadAllLocationsFromFirestore() {
-        Log.d("Firestore", "Начало загрузки всех маркеров из Firestore")
-
+    private fun loadAllLocationsFromFirestore(currentUserMarker: Marker?) {
         db.collection("locations").addSnapshotListener { snapshots, e ->
             if (e != null) {
                 Log.e("Firestore", "Ошибка получения данных из Firestore: ${e.message}")
                 return@addSnapshotListener
             }
 
-            // Удаляем маркеры других пользователей
+            // Удаляем старые маркеры других пользователей
             otherMarkers.values.forEach { mapView.overlays.remove(it) }
             otherMarkers.clear()
-            Log.d("Firestore", "Удалены все маркеры других пользователей.")
 
             snapshots?.forEach { document ->
                 val latitude = document.getDouble("latitude")
                 val longitude = document.getDouble("longitude")
                 val identifier = document.id
 
-                // Пропускаем текущего пользователя
-                if (identifier == userName) return@forEach
+                if (identifier == userName) return@forEach // Пропускаем текущего пользователя
 
                 if (latitude != null && longitude != null) {
                     val geoPoint = GeoPoint(latitude, longitude)
@@ -329,69 +350,52 @@ class MainActivity : ComponentActivity() {
                     }
                     otherMarkers[identifier] = marker
                     mapView.overlays.add(marker)
-                    Log.d("Firestore", "Добавлен маркер для $identifier на координатах: $latitude, $longitude")
-                } else {
-                    Log.w("Firestore", "Некорректные координаты для $identifier: $latitude, $longitude")
-                }
-            }
-
-            // Добавляем текущий маркер
-            userMarker?.let {
-                if (!mapView.overlays.contains(it)) {
-                    mapView.overlays.add(it)
-                    Log.d("Firestore", "Маркер текущего пользователя добавлен.")
                 }
             }
 
             mapView.invalidate()
-            Log.d("Firestore", "Карта обновлена после добавления всех маркеров.")
         }
     }
 
-
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.d("MainActivity", "onDestroy вызван")
-
-        userMarker?.let { marker ->
-            if (mapView.overlays.contains(marker)) {
-                mapView.overlays.remove(marker)
-                Log.d("onDestroy", "Маркер текущего пользователя удален с карты.")
-            } else {
-                Log.w("onDestroy", "Маркер текущего пользователя не найден на карте.")
-            }
-        }
-
-        if (userName.isNotBlank() && userName != "Гость") {
-            removeUserData(userName)
-        }
-
-        if (isNetworkCallbackRegistered) {
-            try {
-                connectivityManager.unregisterNetworkCallback(networkCallback)
-                isNetworkCallbackRegistered = false
-                Log.d("onDestroy", "NetworkCallback успешно отменен.")
-            } catch (e: IllegalArgumentException) {
-                Log.e("onDestroy", "Ошибка при отмене NetworkCallback: ${e.message}")
-            }
-        }
-
-        if (::locationCallback.isInitialized) {
-            fusedLocationClient.removeLocationUpdates(locationCallback)
-        }
-    }
 
     override fun onStop() {
         super.onStop()
         Log.d("MainActivity", "onStop вызван")
 
-        // Проверка и удаление данных пользователя, если активность завершается не вручную
-        if (!isFinishingManually) {
-            userName?.let {
-                removeUserData(it) // Передаем userName в removeUserData
-            } ?: Log.e("onStop", "Ошибка: userName отсутствует при onStop")
+        if (!isMarkerVisible && userName.isNotBlank() && userName != "Гость") {
+            removeUserData(userName)
+            Log.d("onStop", "Данные пользователя удалены, так как isMarkerVisible = false")
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d("MainActivity", "onDestroy вызван")
+
+        // Проверяем, нужно ли удалять данные пользователя при isMarkerVisible = false
+        if (!isMarkerVisible && userName.isNotBlank() && userName != "Гость") {
+            removeUserData(userName)
+            Log.d("onDestroy", "Данные пользователя удалены, так как isMarkerVisible = false")
+        }
+
+        // Отмена сетевого колбэка с проверкой
+        if (isNetworkCallbackRegistered) {
+            try {
+                connectivityManager.unregisterNetworkCallback(networkCallback)
+                isNetworkCallbackRegistered = false
+                Log.d("onDestroy", "NetworkCallback успешно отменен")
+            } catch (e: IllegalArgumentException) {
+                Log.e("onDestroy", "Ошибка отмены NetworkCallback: ${e.message}")
+            }
+        }
+
+        // Проверяем, инициализирован ли locationCallback перед удалением обновлений
+        if (::locationCallback.isInitialized) {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+            Log.d("onDestroy", "Обновления местоположения успешно остановлены")
+        }
+    }
+
 
     private fun removeUserData(userName: String) {
         db.collection("locations").document(userName)
@@ -619,13 +623,14 @@ fun NicknameDialog(
     )
 }
 
-
 @Composable
 fun AppContent_backend(
     modifier: Modifier = Modifier,
     fusedLocationClient: FusedLocationProviderClient,
     isInternetEnabled: Boolean,
-    onUserNameChange: (String) -> Unit // Добавляем параметр для передачи имени пользователя
+    onUserNameChange: (String) -> Unit,
+    isMarkerVisible: Boolean = true,
+    onMarkerVisibilityChange: (Boolean) -> Unit = {}
 ) {
     var showMap by remember { mutableStateOf(false) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
@@ -634,9 +639,8 @@ fun AppContent_backend(
     // Получаем SharedPreferences для хранения имени пользователя
     val preferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     var userName by remember { mutableStateOf(preferences.getString("user_name", "") ?: "") }
-    var isDialogOpen by remember { mutableStateOf(userName.isBlank()) } // Открываем диалог, если имени нет
+    var isDialogOpen by remember { mutableStateOf(userName.isBlank()) }
 
-    // Функция для сохранения никнейма
     fun saveUserName(name: String) {
         preferences.edit().putString("user_name", name).apply()
         userName = name
@@ -684,15 +688,12 @@ fun AppContent_backend(
         }
     }
 
-    // Обработка нажатия кнопки
     val onButtonClick: () -> Unit = {
         if (userName.isNotBlank()) {
             saveUserName(userName)
             (context as MainActivity).startLocationUpdates(userName)
-
-            // Устанавливаем обновленное местоположение только если оно изменилось
             getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
-                if (userLocation != location) { // Проверяем, изменилось ли местоположение
+                if (userLocation != location) {
                     userLocation = location
                     showMap = true
                 }
@@ -702,7 +703,6 @@ fun AppContent_backend(
         }
     }
 
-    // Отображение диалога для ввода никнейма при первом запуске
     if (isDialogOpen) {
         NicknameDialog(
             currentName = userName,
@@ -714,7 +714,6 @@ fun AppContent_backend(
         )
     }
 
-    // Условие для отображения карты или начального экрана
     if (showMap && userLocation != null) {
         MapScreen_Backend(modifier, userLocation, userName)
     } else {
@@ -725,7 +724,6 @@ fun AppContent_backend(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Поле ввода имени пользователя
             TextField(
                 value = userName,
                 onValueChange = { userName = it },
@@ -735,11 +733,12 @@ fun AppContent_backend(
                     .padding(bottom = 16.dp)
             )
 
-            // Кнопка для продолжения
             ButtonInterface(
                 onButtonClick = onButtonClick,
                 isLocationEnabled = isLocationEnabled,
                 isInternetEnabled = isInternetEnabled,
+                isMarkerVisible = isMarkerVisible,
+                onMarkerVisibilityChange = onMarkerVisibilityChange,
                 modifier = modifier
             )
         }
@@ -751,17 +750,17 @@ fun ButtonInterface(
     onButtonClick: () -> Unit,
     isLocationEnabled: Boolean,
     isInternetEnabled: Boolean,
+    isMarkerVisible: Boolean,
+    onMarkerVisibilityChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF0F2F5)) // Светлый фон для более современного стиля
+            .background(Color(0xFFF0F2F5))
     ) {
-        // Создаем ссылки на компоненты
-        val (locationCard, internetCard, startButton) = createRefs()
+        val (locationCard, internetCard, startButton, visibilityToggle) = createRefs()
 
-        // Карточка для индикатора местоположения
         StatusCard(
             title = "Местоположение",
             isEnabled = isLocationEnabled,
@@ -779,7 +778,6 @@ fun ButtonInterface(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        // Карточка для индикатора интернета
         StatusCard(
             title = "Интернет",
             isEnabled = isInternetEnabled,
@@ -797,7 +795,26 @@ fun ButtonInterface(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        // Современная кнопка "Начать" с градиентом и увеличенными отступами
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .constrainAs(visibilityToggle) {
+                    top.linkTo(internetCard.bottom, margin = 16.dp)
+                    start.linkTo(parent.start, margin = 16.dp)
+                    end.linkTo(parent.end, margin = 16.dp)
+                }
+        ) {
+            Checkbox(
+                checked = isMarkerVisible,
+                onCheckedChange = onMarkerVisibilityChange
+            )
+            Text(
+                text = "Включить видимость маркера для других",
+                color = Color(0xFF333333),
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
         Button(
             onClick = onButtonClick,
             modifier = Modifier
@@ -809,7 +826,7 @@ fun ButtonInterface(
                     ),
                     shape = RoundedCornerShape(16.dp)
                 )
-                .constrainAs(startButton) { // Обратите внимание на использование имени startButton
+                .constrainAs(startButton) {
                     bottom.linkTo(parent.bottom, margin = 32.dp)
                     start.linkTo(parent.start, margin = 16.dp)
                     end.linkTo(parent.end, margin = 16.dp)
@@ -819,11 +836,11 @@ fun ButtonInterface(
             elevation = ButtonDefaults.buttonElevation(pressedElevation = 12.dp, defaultElevation = 6.dp)
         ) {
             Text("Начать", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-
-
         }
     }
 }
+
+
 
 @Composable
 fun StatusCard(
