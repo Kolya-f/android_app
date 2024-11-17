@@ -72,6 +72,10 @@ dependencies {
     implementation("org.osmdroid:osmdroid-android:6.1.11")
     implementation("org.osmdroid:osmdroid-mapsforge:6.1.11")
 
+    implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+
+    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
     // Jetpack Compose зависимости
     implementation("androidx.activity:activity-compose:1.5.1")
     implementation("androidx.compose.ui:ui:1.7.5")
