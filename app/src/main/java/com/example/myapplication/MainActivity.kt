@@ -70,6 +70,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.google.firebase.firestore.QuerySnapshot
+
 
 val LightBlue = Color(0xFFADD8E6)
 
@@ -88,7 +90,6 @@ class MainActivity : ComponentActivity() {
     private var userName: String = "Гость" // Начальное значение — "Гость"
     private var isFinishingManually = false // Флаг для ручного завершения
     private var userMarker: Marker? = null
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,9 +120,6 @@ class MainActivity : ComponentActivity() {
         if (!checkLocationPermission()) {
             requestLocationPermission()
         }
-
-        // Запуск логирования маркеров
-        startMarkersLoggingCoroutine()
 
         // Загружаем маркеры из Firestore (без текущего пользователя, так как его маркер еще не создан)
         loadAllLocationsFromFirestore()
@@ -156,19 +154,74 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startMarkersLoggingCoroutine() {
-        CoroutineScope(Dispatchers.Main).launch {
-            while (isActive) {
-                mapView.overlays.filterIsInstance<Marker>().forEach { marker ->
-                    // Проверяем, есть ли дубли текущего пользователя
-                    if (marker.title == userName) {
-                        Log.d("MarkersLogging", "Текущий маркер: ${marker.title}, Координаты: ${marker.position.latitude}, ${marker.position.longitude}")
-                    } else {
-                        Log.d("MarkersLogging", "Другой маркер: ${marker.title}, Координаты: ${marker.position.latitude}, ${marker.position.longitude}")
-                    }
+    private fun removeStaleMarkers() {
+        val currentTime = System.currentTimeMillis()
+
+        // Зчитуємо всі маркери з карти
+        val mapMarkers = mapView.overlays.filterIsInstance<Marker>()
+        Log.d("updateAndRemoveStaleMarkers", "Зчитано маркери з карти: ${mapMarkers.map { it.title }}")
+
+        // Додаємо або оновлюємо маркери в базі даних
+        mapMarkers.forEach { marker ->
+            val id = marker.relatedObject?.toString() ?: return@forEach // Ідентифікатор маркера
+            val markerData = hashMapOf(
+                "latitude" to marker.position.latitude,
+                "longitude" to marker.position.longitude,
+                "timestamp" to currentTime,
+                "id" to id,
+                "name" to marker.title
+            )
+
+            // Додаємо або оновлюємо документ в Firestore
+            db.collection("locations").document(id)
+                .set(markerData)
+                .addOnSuccessListener {
+                    Log.d("updateAndRemoveStaleMarkers", "Оновлено маркер у базі: $id")
                 }
-                delay(500) // Интервал логирования
+                .addOnFailureListener { e ->
+                    Log.e("updateAndRemoveStaleMarkers", "Помилка при оновленні маркера $id", e)
+                }
+        }
+
+        // Отримуємо всі маркери з бази даних
+        db.collection("locations").get().addOnSuccessListener { snapshots ->
+            val staleMarkers = mutableListOf<String>()
+
+            snapshots.forEach { document ->
+                val id = document.getString("id") ?: return@forEach
+                val timestamp = document.getLong("timestamp") ?: return@forEach
+
+                if (currentTime - timestamp > 15_000) { // Якщо timestamp старший за 15 секунд
+                    staleMarkers.add(id)
+                }
             }
+
+            // Видаляємо застарілі маркери
+            staleMarkers.forEach { id ->
+                val marker = userMarkers[id]
+                if (marker != null) {
+                    mapView.overlays.remove(marker) // Видаляємо маркер з карти
+                    userMarkers.remove(id) // Видаляємо з локального списку
+                    Log.d("updateAndRemoveStaleMarkers", "Видалено маркер з ID: $id")
+                }
+
+                // Видаляємо документ з бази даних
+                db.collection("locations").document(id).delete()
+                    .addOnSuccessListener {
+                        Log.d("updateAndRemoveStaleMarkers", "Видалено документ з бази для ID: $id")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("updateAndRemoveStaleMarkers", "Помилка при видаленні документа для ID: $id", e)
+                    }
+            }
+
+            // Логуємо активні маркери
+            Log.d("updateAndRemoveStaleMarkers", "Активні маркери: ${userMarkers.keys}")
+
+            // Оновлюємо карту
+            mapView.invalidate()
+        }.addOnFailureListener { e ->
+            Log.e("updateAndRemoveStaleMarkers", "Помилка при отриманні маркерів з бази даних", e)
         }
     }
 
@@ -272,17 +325,20 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        val userId = userName.hashCode().toString() // Генерируем уникальный ID (или используйте Firebase Auth ID)
         val locationData = hashMapOf(
             "latitude" to latitude,
             "longitude" to longitude,
-            "timestamp" to System.currentTimeMillis()
+            "timestamp" to System.currentTimeMillis(),
+            "id" to userId, // Добавляем ID пользователя
+            "name" to userName // Добавляем имя пользователя
         )
 
-        db.collection("locations").document(userName).set(locationData)
+        db.collection("locations").document(userId).set(locationData)
             .addOnSuccessListener {
                 Log.d(
                     "sendLocationToFirestore",
-                    "Данные местоположения успешно отправлены для пользователя $userName"
+                    "Данные местоположения успешно отправлены для пользователя $userName с ID $userId"
                 )
             }
             .addOnFailureListener { e ->
@@ -297,46 +353,44 @@ class MainActivity : ComponentActivity() {
                 return@addSnapshotListener
             }
 
-            // Удаляем маркеры других пользователей
-            userMarkers.values.forEach { mapView.overlays.remove(it) }
-            userMarkers.clear()
+            if (snapshots != null) {
+                // Видаляємо застарілі маркери
+                removeStaleMarkers()
 
-            snapshots?.forEach { document ->
-                val latitude = document.getDouble("latitude")
-                val longitude = document.getDouble("longitude")
-                val identifier = document.id
+                // Обробляємо нові маркери
+                snapshots.forEach { document ->
+                    val latitude = document.getDouble("latitude")
+                    val longitude = document.getDouble("longitude")
+                    val identifier = document.getString("id") ?: "unknown"
+                    val name = document.getString("name") ?: "Без имени"
 
-                // Пропускаем текущего пользователя
-                if (identifier == userName) {
-                    Log.d("Firestore", "Пропускаем маркер текущего пользователя: $userName")
-                    return@forEach
-                }
-
-                if (latitude != null && longitude != null) {
-                    val geoPoint = GeoPoint(latitude, longitude)
-                    val marker = Marker(mapView).apply {
-                        position = geoPoint
-                        title = "Device: $identifier"
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    if (identifier == userName.hashCode().toString()) {
+                        Log.d("Firestore", "Пропускаем маркер текущего пользователя: $userName")
+                        return@forEach
                     }
-                    userMarkers[identifier] = marker
-                    mapView.overlays.add(marker)
-                    Log.d("Firestore", "Добавлен маркер для $identifier на координатах: $latitude, $longitude")
-                } else {
-                    Log.w("Firestore", "Некорректные координаты для $identifier: $latitude, $longitude")
-                }
-            }
 
-            // Убедитесь, что маркер текущего пользователя есть на карте
-            userMarker?.let {
-                if (!mapView.overlays.contains(it)) {
-                    mapView.overlays.add(it)
-                    Log.d("Firestore", "Маркер текущего пользователя добавлен.")
-                }
-            }
+                    if (latitude != null && longitude != null) {
+                        val geoPoint = GeoPoint(latitude, longitude)
+                        val marker = userMarkers[identifier] ?: Marker(mapView).apply {
+                            userMarkers[identifier] = this
+                            mapView.overlays.add(this)
+                        }
 
-            mapView.invalidate()
-            Log.d("Firestore", "Карта обновлена после добавления всех маркеров.")
+                        marker.apply {
+                            position = geoPoint
+                            title = "Device: $name"
+                            relatedObject = identifier
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        }
+                        Log.d("Firestore", "Добавлен или обновлен маркер для $identifier ($name) на координатах: $latitude, $longitude")
+                    } else {
+                        Log.w("Firestore", "Некорректные координаты для $identifier: $latitude, $longitude")
+                    }
+                }
+
+                mapView.invalidate()
+                Log.d("Firestore", "Карта обновлена после обработки всех маркеров.")
+            }
         }
     }
 
@@ -383,7 +437,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun removeUserData(userName: String) {
-        db.collection("locations").document(userName)
+        val userId = userName.hashCode().toString() // Генерируем ID
+        db.collection("locations").document(userId)
             .delete()
             .addOnSuccessListener {
                 Log.d(
