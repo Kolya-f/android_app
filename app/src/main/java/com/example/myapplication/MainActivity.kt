@@ -64,7 +64,12 @@ import com.google.firebase.FirebaseApp
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import android.content.SharedPreferences
 import android.location.LocationManager
-
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 val LightBlue = Color(0xFFADD8E6)
 
@@ -115,6 +120,9 @@ class MainActivity : ComponentActivity() {
             requestLocationPermission()
         }
 
+        // Запуск логирования маркеров
+        startMarkersLoggingCoroutine()
+
         // Загружаем маркеры из Firestore (без текущего пользователя, так как его маркер еще не создан)
         loadAllLocationsFromFirestore()
 
@@ -148,6 +156,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun startMarkersLoggingCoroutine() {
+        CoroutineScope(Dispatchers.Main).launch {
+            while (isActive) {
+                mapView.overlays.filterIsInstance<Marker>().forEach { marker ->
+                    // Проверяем, есть ли дубли текущего пользователя
+                    if (marker.title == userName) {
+                        Log.d("MarkersLogging", "Текущий маркер: ${marker.title}, Координаты: ${marker.position.latitude}, ${marker.position.longitude}")
+                    } else {
+                        Log.d("MarkersLogging", "Другой маркер: ${marker.title}, Координаты: ${marker.position.latitude}, ${marker.position.longitude}")
+                    }
+                }
+                delay(500) // Интервал логирования
+            }
+        }
+    }
 
     private fun setupOSMDroid() {
         Configuration.getInstance().apply {
@@ -225,22 +248,19 @@ class MainActivity : ComponentActivity() {
     private fun updateMarkerOnMap(latitude: Double, longitude: Double, userName: String) {
         val geoPoint = GeoPoint(latitude, longitude)
 
-        // Если маркер текущего пользователя уже существует, обновляем его позицию
-        if (userMarker != null) {
-            userMarker?.position = geoPoint
-            Log.d("updateMarkerOnMap", "Маркер текущего пользователя обновлен на координатах: $latitude, $longitude")
-        } else {
-            // Создаем новый маркер для текущего пользователя
-            userMarker = Marker(mapView).apply {
-                position = geoPoint
-                title = userName
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            }
-            mapView.overlays.add(userMarker)
-            Log.d("updateMarkerOnMap", "Создан маркер текущего пользователя на координатах: $latitude, $longitude")
-        }
+        // Удаляем старый маркер текущего пользователя, если он существует
+        userMarker?.let { mapView.overlays.remove(it) }
 
-        mapView.invalidate()
+        // Создаем новый маркер для текущего пользователя
+        userMarker = Marker(mapView).apply {
+            position = geoPoint
+            title = userName // Название маркера
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        }
+        mapView.overlays.add(userMarker) // Добавляем обновленный маркер на карту
+        Log.d("updateMarkerOnMap", "Маркер текущего пользователя обновлен на координатах: $latitude, $longitude")
+
+        mapView.invalidate() // Обновляем карту
     }
 
     private fun sendLocationToFirestore(latitude: Double, longitude: Double, userName: String) {
