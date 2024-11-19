@@ -6,11 +6,6 @@ import android.graphics.drawable.Drawable
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.ktx.firestore
 import androidx.compose.ui.viewinterop.AndroidView
-import kotlinx.coroutines.delay
-import androidx.compose.animation.core.*
-import android.content.BroadcastReceiver
-import android.content.Intent
-import android.content.IntentFilter
 import androidx.compose.runtime.*
 import android.Manifest
 import android.util.Log
@@ -19,8 +14,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
