@@ -270,6 +270,8 @@ class MainActivity : ComponentActivity() {
             "timestamp" to System.currentTimeMillis()
         )
 
+        Log.d("sendLocationToFirestore", "Отправка данных: $locationData для пользователя $userName")
+
         db.collection("locations").document(userName).set(locationData)
             .addOnSuccessListener {
                 Log.d("sendLocationToFirestore", "Данные местоположения успешно отправлены для пользователя $userName")
@@ -449,11 +451,9 @@ fun MapScreen_Backend(
     userLocation: GeoPoint?,
     userName: String
 ) {
-    // Переменная для хранения единственного маркера пользователя
-    var userMarker: Marker? by remember { mutableStateOf(null) }
-
     // Управление маркерами других устройств
     val deviceMarkers = mutableMapOf<String, Marker>()
+    var userMarker: Marker? = null
 
     AndroidView(
         factory = { context ->
@@ -465,10 +465,9 @@ fun MapScreen_Backend(
                     // Инициализируем маркер пользователя
                     userLocation?.let { geoPoint ->
                         controller.setCenter(geoPoint)
-                        userMarker = addOrUpdateUserMarker(this, geoPoint, userName)
                     }
 
-                    // Слушатель для загрузки и обновления маркеров других пользователей
+                    // Загрузка и обновление маркеров других пользователей
                     val db = Firebase.firestore
                     db.collection("locations")
                         .addSnapshotListener { snapshots, error ->
@@ -502,25 +501,14 @@ fun MapScreen_Backend(
             userLocation?.let { geoPoint ->
                 // Обновляем позицию маркера пользователя, если она изменилась
                 if (userMarker == null) {
-                    userMarker = addOrUpdateUserMarker(mapView, geoPoint, userName)
+                    userMarker = addOrUpdateDeviceMarker(mapView, geoPoint, userName)
                 } else {
-                    userMarker?.position = geoPoint  // Меняем координаты, не создавая новый маркер
+                    userMarker?.position = geoPoint // Меняем координаты, не создавая новый маркер
                     mapView.invalidate()
                 }
             }
         }
     )
-}
-
-// Функция для добавления или обновления маркера пользователя с эффектом мигания
-private fun addOrUpdateUserMarker(mapView: MapView, geoPoint: GeoPoint, userName: String): Marker {
-    val userMarker = Marker(mapView).apply {
-        position = geoPoint
-        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-        title = userName+"Начальний"
-    }
-
-    return userMarker  // Возвращаем маркер для отслеживания
 }
 
 // Функция для добавления или обновления маркера устройства

@@ -54,7 +54,7 @@ android {
 }
 dependencies {
     // Основные AndroidX зависимости
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation(libs.androidx.core.ktx)
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
