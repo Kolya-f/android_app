@@ -1,6 +1,7 @@
 package com.example.myapplication
 
-
+import androidx.core.graphics.drawable.DrawableCompat
+import android.graphics.drawable.Drawable
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.ktx.firestore
 import androidx.compose.ui.viewinterop.AndroidView
@@ -64,7 +65,6 @@ import com.google.firebase.FirebaseApp
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import android.content.SharedPreferences
 import android.location.LocationManager
-
 
 val LightBlue = Color(0xFFADD8E6)
 
@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
             title = identifier // Устанавливаем в качестве заголовка маркера имя пользователя или устройства
         }
         mapView.overlays.add(marker)
-        Log.d("Map", "Маркер добавлен на карту для: $identifier на координатах: ${geoPoint.latitude}, ${geoPoint.longitude}")
+        Log.d("Map", "Маркер добавлен на карту для: $identifier з  на координатах: ${geoPoint.latitude}, ${geoPoint.longitude}")
     }
 
 
@@ -345,6 +345,8 @@ class MainActivity : ComponentActivity() {
             } catch (e: IllegalArgumentException) {
                 Log.e("MainActivity", "Ошибка при отмене NetworkCallback: он не был зарегистрирован", e)
             }
+        } else {
+            Log.d("MainActivity", "NetworkCallback не был зарегистрирован, пропускаем отмену")
         }
 
         // Остановка обновлений местоположения
@@ -455,6 +457,47 @@ fun MapScreen_Backend(
     val deviceMarkers = mutableMapOf<String, Marker>()
     var userMarker: Marker? = null
 
+    // Флаг для отслеживания, был ли маркер пользователя уже добавлен
+    var isUserMarkerAdded = false
+
+    fun addOrUpdateUserMarker(mapView: MapView, geoPoint: GeoPoint) {
+        if (isUserMarkerAdded) {
+            // Если маркер пользователя уже добавлен, обновляем его позицию
+            userMarker?.position = geoPoint
+            mapView.invalidate()
+        } else {
+            // Создаем маркер и устанавливаем его цвет
+            userMarker = Marker(mapView).apply {
+                position = geoPoint
+                title = "$userName (предварительное местонахождение)"
+
+                // Устанавливаем цвет иконки
+                val originalIcon: Drawable? = ContextCompat.getDrawable(mapView.context, android.R.drawable.ic_menu_mylocation)
+                val tintedIcon = originalIcon?.mutate()?.let { drawable ->
+                    DrawableCompat.setTint(drawable, android.graphics.Color.parseColor("#9d85a1"))
+                    drawable
+                }
+                icon = tintedIcon
+
+                // Устанавливаем якорь маркера
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            }
+            mapView.overlays.add(userMarker)
+            isUserMarkerAdded = true
+        }
+    }
+
+    fun addOrUpdateDeviceMarker(mapView: MapView, geoPoint: GeoPoint, deviceName: String): Marker {
+        return deviceMarkers[deviceName]?.apply {
+            position = geoPoint
+        } ?: Marker(mapView).apply {
+            position = geoPoint
+            title = deviceName
+            mapView.overlays.add(this)
+            deviceMarkers[deviceName] = this
+        }
+    }
+
     AndroidView(
         factory = { context ->
             MapView(context).apply {
@@ -462,12 +505,13 @@ fun MapScreen_Backend(
                 setMultiTouchControls(true)
 
                 post {
-                    // Инициализируем маркер пользователя
+                    // Устанавливаем центр карты на начальное положение пользователя
                     userLocation?.let { geoPoint ->
                         controller.setCenter(geoPoint)
+                        addOrUpdateUserMarker(this, geoPoint)
                     }
 
-                    // Загрузка и обновление маркеров других пользователей
+                    // Слушатель для загрузки и обновления маркеров других пользователей
                     val db = Firebase.firestore
                     db.collection("locations")
                         .addSnapshotListener { snapshots, error ->
@@ -487,8 +531,7 @@ fun MapScreen_Backend(
 
                                 if (latitude != null && longitude != null) {
                                     val geoPoint = GeoPoint(latitude, longitude)
-                                    val marker = addOrUpdateDeviceMarker(this, geoPoint, deviceName)
-                                    deviceMarkers[deviceName] = marker
+                                    addOrUpdateDeviceMarker(this, geoPoint, deviceName)
                                 }
                             }
                             invalidate() // Обновляем карту
@@ -500,28 +543,13 @@ fun MapScreen_Backend(
         update = { mapView ->
             userLocation?.let { geoPoint ->
                 // Обновляем позицию маркера пользователя, если она изменилась
-                if (userMarker == null) {
-                    userMarker = addOrUpdateDeviceMarker(mapView, geoPoint, userName)
-                } else {
-                    userMarker?.position = geoPoint // Меняем координаты, не создавая новый маркер
-                    mapView.invalidate()
-                }
+                addOrUpdateUserMarker(mapView, geoPoint)
             }
         }
     )
 }
 
-// Функция для добавления или обновления маркера устройства
-private fun addOrUpdateDeviceMarker(mapView: MapView, geoPoint: GeoPoint, deviceName: String): Marker {
-    val deviceMarker = Marker(mapView).apply {
-        position = geoPoint
-        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-        title = "Device: $deviceName"
-    }
-    mapView.overlays.add(deviceMarker)
-    Log.d("MapScreen_Backend", "Маркер для устройства $deviceName добавлен на карту.")
-    return deviceMarker
-}
+
 
 
 @Composable
