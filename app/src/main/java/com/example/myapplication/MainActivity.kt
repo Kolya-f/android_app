@@ -627,6 +627,7 @@ fun AppContent_backend(
         )
     }
 
+    // Ensure composables are only called within the composable function
     if (showMap && userLocation != null) {
         MapScreen_Backend(modifier, userLocation)
     } else {
@@ -657,6 +658,7 @@ fun AppContent_backend(
 }
 
 
+
 @Composable
 fun ButtonInterface(
     onButtonClick: () -> Unit,
@@ -664,15 +666,19 @@ fun ButtonInterface(
     isInternetEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // Змінна для чекбокса, пам'ятаємо стан
+    var showLocationAfterExit by remember { mutableStateOf(false) }
+
+    // Додавання ConstraintLayout для кнопок і статусів
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF0F2F5)) // Светлый фон для более современного стиля
+            .background(Color(0xFFF0F2F5)) // Світлий фон для сучасного стилю
     ) {
-        // Создаем ссылки на компоненты
-        val (locationCard, internetCard, startButton) = createRefs()
+        // Створюємо посилання на компоненти
+        val (locationCard, internetCard, startButton, showLocationCheckbox) = createRefs()
 
-        // Карточка для индикатора местоположения
+        // Карточка для індикатора місцезнаходження
         StatusCard(
             title = "Местоположение",
             isEnabled = isLocationEnabled,
@@ -690,7 +696,7 @@ fun ButtonInterface(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        // Карточка для индикатора интернета
+        // Карточка для індикатора інтернету
         StatusCard(
             title = "Интернет",
             isEnabled = isInternetEnabled,
@@ -708,9 +714,34 @@ fun ButtonInterface(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        // Современная кнопка "Начать" с градиентом и увеличенными отступами
+        // Додавання чекбокса для збереження статусу місцезнаходження
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .constrainAs(showLocationCheckbox) {
+                    top.linkTo(internetCard.bottom, margin = 16.dp)
+                    start.linkTo(parent.start, margin = 16.dp)
+                }
+                .padding(horizontal = 16.dp)
+        ) {
+            Checkbox(
+                checked = showLocationAfterExit,
+                onCheckedChange = { showLocationAfterExit = it },
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text("Показувати місцезнаходження після закриття програми")
+        }
+
+        // Кнопка "Начати" з сучасним стилем
         Button(
-            onClick = onButtonClick,
+            onClick = {
+                onButtonClick()
+
+                // Доступ до SharedPreferences безпосередньо в composable функції
+                val context = LocalContext.current
+                val preferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                preferences.edit().putBoolean("show_location_after_exit", showLocationAfterExit).apply()
+            },
             modifier = Modifier
                 .padding(horizontal = 8.dp)
                 .shadow(elevation = 10.dp, shape = RoundedCornerShape(16.dp))
@@ -720,7 +751,7 @@ fun ButtonInterface(
                     ),
                     shape = RoundedCornerShape(16.dp)
                 )
-                .constrainAs(startButton) { // Обратите внимание на использование имени startButton
+                .constrainAs(startButton) {
                     bottom.linkTo(parent.bottom, margin = 32.dp)
                     start.linkTo(parent.start, margin = 16.dp)
                     end.linkTo(parent.end, margin = 16.dp)
@@ -731,8 +762,10 @@ fun ButtonInterface(
         ) {
             Text("Начать", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
+
     }
 }
+
 
 
 @Composable
