@@ -321,13 +321,39 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    override fun onStop() {
+        super.onStop()
+        Log.d("MainActivity", "onStop вызван")
+
+        // Проверка состояния чекбокса "Показывать местоположение после выхода"
+        val sharedPreferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val showLocationAfterExit = sharedPreferences.getBoolean("show_location_after_exit", false)
+
+        // Удаляем данные только если чекбокс выключен и активность завершается не вручную
+        if (!isFinishingManually && !showLocationAfterExit) {
+            userName?.let {
+                removeUserData(it)
+            }
+        } else {
+            Log.d("MainActivity", "Данные пользователя не удалены: showLocationAfterExit = $showLocationAfterExit")
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("MainActivity", "onDestroy вызван, удаляем данные пользователя $userName")
+        Log.d("MainActivity", "onDestroy вызван")
 
-        // Удаляем данные пользователя из базы данных, если имя пользователя указано
-        userName?.let {
-            removeUserData(it)
+        // Проверка состояния чекбокса "Показывать местоположение после выхода"
+        val sharedPreferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val showLocationAfterExit = sharedPreferences.getBoolean("show_location_after_exit", false)
+
+        // Удаляем данные только если чекбокс выключен
+        if (!showLocationAfterExit) {
+            userName?.let {
+                removeUserData(it)
+            }
+        } else {
+            Log.d("MainActivity", "Данные пользователя не удалены: showLocationAfterExit = $showLocationAfterExit")
         }
 
         // Проверяем, был ли зарегистрирован NetworkCallback, перед его отменой
@@ -344,18 +370,6 @@ class MainActivity : ComponentActivity() {
         // Остановка обновлений местоположения
         fusedLocationClient.removeLocationUpdates(locationCallback)
         Log.d("MainActivity", "Обновления местоположения успешно остановлены")
-    }
-
-    override fun onStop() {
-        super.onStop()
-        Log.d("MainActivity", "onStop вызван")
-
-        // Проверка и удаление данных пользователя, если активность завершается не вручную
-        if (!isFinishingManually) {
-            userName?.let {
-                removeUserData(it)
-            }
-        }
     }
 
     private fun removeUserData(userName: String) {
@@ -382,13 +396,12 @@ fun isLocationServiceEnabled(context: Context): Boolean {
             locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 }
 
-// Функция для получения и сохранения местоположения
 private fun getUserLocation(
     fusedLocationClient: FusedLocationProviderClient,
     context: Context,
     isInternetEnabled: Boolean,
-    onLocationReceived: (GeoPoint?) -> Unit)
-{
+    onLocationReceived: (GeoPoint?) -> Unit
+) {
     if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
         Toast.makeText(context, "Нет разрешения на доступ к местоположению", Toast.LENGTH_SHORT).show()
         onLocationReceived(null)
@@ -396,6 +409,7 @@ private fun getUserLocation(
     }
 
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    val showLocationAfterExit = sharedPreferences.getBoolean("show_location_after_exit", false)
 
     if (isInternetEnabled) {
         // Получение последнего известного местоположения онлайн и его сохранение
@@ -403,7 +417,11 @@ private fun getUserLocation(
             .addOnSuccessListener { location ->
                 if (location != null) {
                     val geoPoint = GeoPoint(location.latitude, location.longitude)
-                    saveLocationToPreferences(sharedPreferences, geoPoint) // Сохраняем местоположение
+                    if (showLocationAfterExit) {
+                        saveLocationToPreferences(sharedPreferences, geoPoint) // Сохраняем местоположение
+                    } else {
+                        clearSavedLocation(sharedPreferences) // Удаляем сохраненное местоположение
+                    }
                     onLocationReceived(geoPoint)
                 } else {
                     Toast.makeText(context, "Местоположение не получено", Toast.LENGTH_SHORT).show()
@@ -416,9 +434,24 @@ private fun getUserLocation(
             }
     } else {
         // Офлайн-режим: загружаем последнее сохраненное местоположение или используем координаты по умолчанию
-        onLocationReceived(getSavedLocation(sharedPreferences) ?: GeoPoint(48.4647, 35.0462)) // Днепр по умолчанию
+        val savedLocation = getSavedLocation(sharedPreferences)
+        if (savedLocation != null) {
+            onLocationReceived(savedLocation)
+        } else {
+            Toast.makeText(context, "Нет сохраненного местоположения, используется по умолчанию", Toast.LENGTH_SHORT).show()
+            onLocationReceived(GeoPoint(48.4647, 35.0462)) // Днепр по умолчанию
+        }
     }
 }
+
+// Функция для очистки сохраненного местоположения
+private fun clearSavedLocation(sharedPreferences: SharedPreferences) {
+    sharedPreferences.edit()
+        .remove("last_latitude")
+        .remove("last_longitude")
+        .apply()
+}
+
 
 // Функция для сохранения местоположения в SharedPreferences
 private fun saveLocationToPreferences(sharedPreferences: SharedPreferences, geoPoint: GeoPoint) {
@@ -444,7 +477,7 @@ fun MapScreen_Backend(
     modifier: Modifier = Modifier,
     userLocation: GeoPoint?,
 
-) {
+    ) {
 
     // Управление маркерами других устройств
     val deviceMarkers = mutableMapOf<String, Marker>()
@@ -565,6 +598,17 @@ fun AppContent_backend(
         onUserNameChange(name)
     }
 
+    // Додаємо стан для чекбокса
+    var showLocationAfterExit by remember {
+        mutableStateOf(preferences.getBoolean("show_location_after_exit", false))
+    }
+
+    // Функція для збереження стану чекбокса
+    fun saveShowLocationAfterExitState(isChecked: Boolean) {
+        preferences.edit().putBoolean("show_location_after_exit", isChecked).apply()
+        showLocationAfterExit = isChecked
+    }
+
     var isLocationEnabled by remember {
         mutableStateOf(
             ActivityCompat.checkSelfPermission(
@@ -627,7 +671,6 @@ fun AppContent_backend(
         )
     }
 
-    // Ensure composables are only called within the composable function
     if (showMap && userLocation != null) {
         MapScreen_Backend(modifier, userLocation)
     } else {
@@ -647,6 +690,20 @@ fun AppContent_backend(
                     .padding(bottom = 16.dp)
             )
 
+            // Додаємо чекбокс
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Checkbox(
+                    checked = showLocationAfterExit,
+                    onCheckedChange = { isChecked ->
+                        saveShowLocationAfterExitState(isChecked)
+                    }
+                )
+                Text("Показувати місцезнаходження після виходу")
+            }
+
             ButtonInterface(
                 onButtonClick = onButtonClick,
                 isLocationEnabled = isLocationEnabled,
@@ -658,7 +715,6 @@ fun AppContent_backend(
 }
 
 
-
 @Composable
 fun ButtonInterface(
     onButtonClick: () -> Unit,
@@ -666,19 +722,15 @@ fun ButtonInterface(
     isInternetEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Змінна для чекбокса, пам'ятаємо стан
-    var showLocationAfterExit by remember { mutableStateOf(false) }
-
-    // Додавання ConstraintLayout для кнопок і статусів
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF0F2F5)) // Світлий фон для сучасного стилю
+            .background(Color(0xFFF0F2F5)) // Светлый фон для более современного стиля
     ) {
-        // Створюємо посилання на компоненти
-        val (locationCard, internetCard, startButton, showLocationCheckbox) = createRefs()
+        // Создаем ссылки на компоненты
+        val (locationCard, internetCard, startButton) = createRefs()
 
-        // Карточка для індикатора місцезнаходження
+        // Карточка для индикатора местоположения
         StatusCard(
             title = "Местоположение",
             isEnabled = isLocationEnabled,
@@ -696,7 +748,7 @@ fun ButtonInterface(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        // Карточка для індикатора інтернету
+        // Карточка для индикатора интернета
         StatusCard(
             title = "Интернет",
             isEnabled = isInternetEnabled,
@@ -714,34 +766,9 @@ fun ButtonInterface(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        // Додавання чекбокса для збереження статусу місцезнаходження
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .constrainAs(showLocationCheckbox) {
-                    top.linkTo(internetCard.bottom, margin = 16.dp)
-                    start.linkTo(parent.start, margin = 16.dp)
-                }
-                .padding(horizontal = 16.dp)
-        ) {
-            Checkbox(
-                checked = showLocationAfterExit,
-                onCheckedChange = { showLocationAfterExit = it },
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text("Показувати місцезнаходження після закриття програми")
-        }
-
-        // Кнопка "Начати" з сучасним стилем
+        // Современная кнопка "Начать" с градиентом и увеличенными отступами
         Button(
-            onClick = {
-                onButtonClick()
-
-                // Доступ до SharedPreferences безпосередньо в composable функції
-                val context = LocalContext.current
-                val preferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                preferences.edit().putBoolean("show_location_after_exit", showLocationAfterExit).apply()
-            },
+            onClick = onButtonClick,
             modifier = Modifier
                 .padding(horizontal = 8.dp)
                 .shadow(elevation = 10.dp, shape = RoundedCornerShape(16.dp))
@@ -751,7 +778,7 @@ fun ButtonInterface(
                     ),
                     shape = RoundedCornerShape(16.dp)
                 )
-                .constrainAs(startButton) {
+                .constrainAs(startButton) { // Обратите внимание на использование имени startButton
                     bottom.linkTo(parent.bottom, margin = 32.dp)
                     start.linkTo(parent.start, margin = 16.dp)
                     end.linkTo(parent.end, margin = 16.dp)
@@ -762,10 +789,8 @@ fun ButtonInterface(
         ) {
             Text("Начать", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
-
     }
 }
-
 
 
 @Composable
