@@ -4,8 +4,6 @@ package com.example.myapplication
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.ktx.firestore
 import androidx.compose.ui.viewinterop.AndroidView
-import kotlinx.coroutines.delay
-import androidx.compose.animation.core.*
 import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
@@ -68,10 +66,6 @@ import android.location.LocationManager
 
 val LightBlue = Color(0xFFADD8E6)
 
-// Глобальная переменная для маркера текущего пользователя
-private var deviceMarker: Marker? = null
-
-
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var connectivityManager: ConnectivityManager
@@ -83,6 +77,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var locationCallback: com.google.android.gms.location.LocationCallback
     private var userName: String = "Гость" // Начальное значение — "Гость"
     private var isFinishingManually = false  // Флаг для ручного завершения
+    private var deviceMarker: Marker? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -209,8 +204,8 @@ class MainActivity : ComponentActivity() {
 
         // Запрос местоположения с интервалом 1000 мс (1 секунда)
         val locationRequest = LocationRequest.create().apply {
-            interval = 1000L // 5 секунд
-            fastestInterval = 500L // 3 секунды, чтобы не было слишком частых обновлений
+            interval = 1500L // 5 секунд
+            fastestInterval = 1000L // 3 секунды, чтобы не было слишком частых обновлений
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
@@ -332,8 +327,8 @@ class MainActivity : ComponentActivity() {
 
         // Удаляем данные пользователя из базы данных, если имя пользователя указано
         userName?.let {
-            removeUserData(it) // Передаем userName в removeUserData
-        } ?: Log.e("onDestroy", "Ошибка: userName отсутствует при onDestroy")
+            removeUserData(it)
+        }
 
         // Проверяем, был ли зарегистрирован NetworkCallback, перед его отменой
         if (isNetworkCallbackRegistered) {
@@ -358,8 +353,8 @@ class MainActivity : ComponentActivity() {
         // Проверка и удаление данных пользователя, если активность завершается не вручную
         if (!isFinishingManually) {
             userName?.let {
-                removeUserData(it) // Передаем userName в removeUserData
-            } ?: Log.e("onStop", "Ошибка: userName отсутствует при onStop")
+                removeUserData(it)
+            }
         }
     }
 
@@ -448,29 +443,8 @@ private fun getSavedLocation(sharedPreferences: SharedPreferences): GeoPoint? {
 fun MapScreen_Backend(
     modifier: Modifier = Modifier,
     userLocation: GeoPoint?,
-    userName: String
+
 ) {
-    // Переменная для хранения единственного маркера пользователя
-    var userMarker: Marker? by remember { mutableStateOf(null) }
-    var isBlinking by remember { mutableStateOf(false) }
-
-    // Анимация мигания
-    val infiniteTransition = rememberInfiniteTransition(label = "BlinkingTransition")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "BlinkAlpha"
-    )
-
-    // Включение мигания через три секунды
-    LaunchedEffect(Unit) {
-        delay(3000)
-        isBlinking = true
-    }
 
     // Управление маркерами других устройств
     val deviceMarkers = mutableMapOf<String, Marker>()
@@ -485,7 +459,7 @@ fun MapScreen_Backend(
                     // Инициализируем маркер пользователя
                     userLocation?.let { geoPoint ->
                         controller.setCenter(geoPoint)
-                        userMarker = addOrUpdateUserMarker(this, geoPoint, userName, alpha)
+
                     }
 
                     // Слушатель для загрузки и обновления маркеров других пользователей
@@ -519,30 +493,11 @@ fun MapScreen_Backend(
         },
         modifier = modifier.fillMaxSize(),
         update = { mapView ->
-            userLocation?.let { geoPoint ->
-                // Обновляем позицию маркера пользователя, если она изменилась
-                if (userMarker == null) {
-                    userMarker = addOrUpdateUserMarker(mapView, geoPoint, userName, alpha)
-                } else {
-                    userMarker?.position = geoPoint  // Меняем координаты, не создавая новый маркер
-                    mapView.invalidate()
-                }
+            userLocation?.let {
+                mapView.invalidate()
             }
         }
     )
-}
-
-// Функция для добавления или обновления маркера пользователя с эффектом мигания
-private fun addOrUpdateUserMarker(mapView: MapView, geoPoint: GeoPoint, userName: String, alpha: Float): Marker {
-    val userMarker = Marker(mapView).apply {
-        position = geoPoint
-        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-        title = userName+"addOrUpdateUserMarker"
-
-        icon?.alpha = (alpha * 255).toInt()  // Применяем анимацию мигани
-    }
-
-    return userMarker  // Возвращаем маркер для отслеживания
 }
 
 // Функция для добавления или обновления маркера устройства
@@ -556,7 +511,6 @@ private fun addOrUpdateDeviceMarker(mapView: MapView, geoPoint: GeoPoint, device
     Log.d("MapScreen_Backend", "Маркер для устройства $deviceName добавлен на карту.")
     return deviceMarker
 }
-
 
 @Composable
 fun NicknameDialog(
@@ -590,31 +544,27 @@ fun NicknameDialog(
     )
 }
 
-
 @Composable
 fun AppContent_backend(
     modifier: Modifier = Modifier,
     fusedLocationClient: FusedLocationProviderClient,
     isInternetEnabled: Boolean,
-    onUserNameChange: (String) -> Unit // Добавляем параметр для передачи имени пользователя
+    onUserNameChange: (String) -> Unit
 ) {
     var showMap by remember { mutableStateOf(false) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
     val context = LocalContext.current
 
-    // Получаем SharedPreferences для хранения имени пользователя
     val preferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     var userName by remember { mutableStateOf(preferences.getString("user_name", "") ?: "") }
-    var isDialogOpen by remember { mutableStateOf(userName.isBlank()) } // Открываем диалог, если имени нет
+    var isDialogOpen by remember { mutableStateOf(userName.isBlank()) }
 
-    // Функция для сохранения никнейма
     fun saveUserName(name: String) {
         preferences.edit().putString("user_name", name).apply()
         userName = name
         onUserNameChange(name)
     }
 
-    // Состояние для отслеживания доступности местоположения
     var isLocationEnabled by remember {
         mutableStateOf(
             ActivityCompat.checkSelfPermission(
@@ -623,7 +573,6 @@ fun AppContent_backend(
         )
     }
 
-    // Обновление состояния местоположения при его изменении
     DisposableEffect(context) {
         val locationStatusReceiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -641,7 +590,6 @@ fun AppContent_backend(
         }
     }
 
-    // Лаунчер для запроса разрешений
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -655,10 +603,9 @@ fun AppContent_backend(
         }
     }
 
-    // Обработка нажатия кнопки
     val onButtonClick: () -> Unit = {
         if (userName.isNotBlank()) {
-            saveUserName(userName) // Сохраняем имя
+            saveUserName(userName)
             (context as MainActivity).startLocationUpdates(userName)
             getUserLocation(fusedLocationClient, context, isInternetEnabled) { location ->
                 userLocation = location
@@ -669,7 +616,6 @@ fun AppContent_backend(
         }
     }
 
-    // Отображение диалога для ввода никнейма при первом запуске
     if (isDialogOpen) {
         NicknameDialog(
             currentName = userName,
@@ -681,9 +627,8 @@ fun AppContent_backend(
         )
     }
 
-    // Условие для отображения карты или начального экрана
     if (showMap && userLocation != null) {
-        MapScreen_Backend(modifier, userLocation, userName)
+        MapScreen_Backend(modifier, userLocation)
     } else {
         Column(
             modifier = modifier
@@ -692,7 +637,6 @@ fun AppContent_backend(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Поле ввода имени пользователя
             TextField(
                 value = userName,
                 onValueChange = { userName = it },
@@ -702,7 +646,6 @@ fun AppContent_backend(
                     .padding(bottom = 16.dp)
             )
 
-            // Кнопка для продолжения
             ButtonInterface(
                 onButtonClick = onButtonClick,
                 isLocationEnabled = isLocationEnabled,
@@ -712,6 +655,7 @@ fun AppContent_backend(
         }
     }
 }
+
 
 @Composable
 fun ButtonInterface(
@@ -786,11 +730,10 @@ fun ButtonInterface(
             elevation = ButtonDefaults.buttonElevation(pressedElevation = 12.dp, defaultElevation = 6.dp)
         ) {
             Text("Начать", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-
-
         }
     }
 }
+
 
 @Composable
 fun StatusCard(
