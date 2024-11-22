@@ -1,6 +1,17 @@
 package com.example.myapplication
 
 
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
+import android.app.Service
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.*
+import com.google.firebase.firestore.ktx.firestore
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.ktx.firestore
 import androidx.compose.ui.viewinterop.AndroidView
@@ -62,7 +73,7 @@ import com.google.firebase.FirebaseApp
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import android.content.SharedPreferences
 import android.location.LocationManager
-import com.example.myapplication.ui.theme.LocationService
+
 
 val LightBlue = Color(0xFFADD8E6)
 
@@ -74,38 +85,63 @@ class MainActivity : ComponentActivity() {
     private val db: FirebaseFirestore = Firebase.firestore
     private var isInternetEnabled by mutableStateOf(false)
     private var isNetworkCallbackRegistered = false
-    private var userName: String = "Гость" // Значення за замовчуванням
+    private lateinit var locationCallback: com.google.android.gms.location.LocationCallback
+    private var userName: String = "Гость" // Начальное значение — "Гость"
+    private var isFinishingManually = false  // Флаг для ручного завершения
     private var deviceMarker: Marker? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("MainActivity", "onCreate вызван")
 
-        FirebaseApp.initializeApp(this)
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
+        // Инициализация connectivityManager перед использованием
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        registerNetworkCallback()
 
-        intent.getStringExtra("USER_NAME")?.let { inputName ->
-            if (inputName.isNotBlank()) userName = inputName.trim()
+        // Инициализация networkCallback перед регистрацией
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                updateNetworkStatus(true)
+                Log.d("NetworkCallback", "Сеть доступна")
+            }
+
+            override fun onLost(network: Network) {
+                updateNetworkStatus(false)
+                Log.d("NetworkCallback", "Сеть потеряна")
+            }
         }
 
-        setupOSMDroid()
+        // Регистрируем сетевой callback
+        connectivityManager.registerDefaultNetworkCallback(networkCallback)
+        isNetworkCallbackRegistered = true
+
+        // Получаем новое имя пользователя из Intent или сохраняем "Гость"
+        intent.getStringExtra("USER_NAME")?.let { inputName ->
+            if (inputName.isNotBlank() && inputName != userName) {
+                userName = inputName.trim() // Устанавливаем новое имя пользователя
+                Log.d("MainActivity", "userName обновлен на: $userName")
+            } else {
+                Log.d("MainActivity", "userName остается: $userName")
+            }
+        }
+
+        FirebaseApp.initializeApp(this) // Инициализация Firebase
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this) // Инициализация местоположения
+        setupOSMDroid() // Настройка карты osmdroid
 
         mapView = MapView(this).apply {
             setTileSource(TileSourceFactory.MAPNIK)
         }
 
-        // Запит дозволів на доступ до місцезнаходження
+        // Проверка разрешений и начало обновлений местоположения
         if (checkLocationPermission()) {
-            startLocationUpdates()
+            startLocationUpdates(userName)
         } else {
             requestLocationPermission()
         }
 
-        // Загрузка маркерів з Firestore
-        loadAllLocationsFromFirestore()
+        loadAllLocationsFromFirestore() // Загрузка маркеров других пользователей
 
+        // Установка интерфейса Compose
         setContent {
             MyApplicationTheme {
                 Scaffold(
@@ -119,6 +155,7 @@ class MainActivity : ComponentActivity() {
                         onUserNameChange = { newUserName ->
                             if (newUserName.isNotBlank() && newUserName != userName) {
                                 userName = newUserName.trim()
+                                Log.d("MainActivity", "userName обновлен на: $userName")
                             }
                         }
                     )
@@ -135,61 +172,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkLocationPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun requestLocationPermission() {
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
-    }
-
-    fun startLocationUpdates() {
-        if (!checkLocationPermission()) {
-            requestLocationPermission()
-            return
-        }
-
-        val serviceIntent = Intent(this, LocationService::class.java).apply {
-            putExtra("USER_NAME", userName)
-        }
-        ContextCompat.startForegroundService(this, serviceIntent)
-    }
-
-    private fun loadAllLocationsFromFirestore() {
-        db.collection("locations").addSnapshotListener { snapshots, e ->
-            if (e != null) {
-                Log.w("Firestore", "Ошибка получения данных из Firestore", e)
-                return@addSnapshotListener
-            }
-
-            mapView.overlays.clear()
-
-            deviceMarker?.let { mapView.overlays.add(it) }
-
-            snapshots?.forEach { document ->
-                val latitude = document.getDouble("latitude")
-                val longitude = document.getDouble("longitude")
-                val identifier = document.id
-
-                if (latitude != null && longitude != null) {
-                    addMarkerToMap(GeoPoint(latitude, longitude), identifier)
-                }
-            }
-
-            mapView.invalidate()
-        }
-    }
-
-    private fun addMarkerToMap(geoPoint: GeoPoint, identifier: String) {
-        val marker = Marker(mapView).apply {
-            position = geoPoint
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            title = identifier
-        }
-        mapView.overlays.add(marker)
-    }
-
-    private fun registerNetworkCallback() {
+    private fun setupNetworkCallback() {
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 updateNetworkStatus(true)
@@ -197,9 +181,10 @@ class MainActivity : ComponentActivity() {
 
             override fun onLost(network: Network) {
                 updateNetworkStatus(false)
+                Log.d("NetworkCallback", "Сеть потеряна, удаляем данные пользователя $userName")
+                removeUserData(userName)
             }
         }
-
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
         isNetworkCallbackRegistered = true
     }
@@ -211,16 +196,286 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun checkLocationPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestLocationPermission() {
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                "LocationChannel",
+                "Оновлення місцезнаходження",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(serviceChannel)
+        }
+    }
+
+
+    // Начало обновлений местоположения с userName
+    fun startLocationUpdates(userName: String) {
+        Log.d("StartLocationUpdates", "Вошли в startLocationUpdates с userName = $userName")
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestLocationPermission()
+            return
+        }
+
+        // Запрос местоположения с интервалом 1000 мс (1 секунда)
+        val locationRequest = LocationRequest.create().apply {
+            interval = 1500L // 5 секунд
+            fastestInterval = 1000L // 3 секунды, чтобы не было слишком частых обновлений
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
+
+
+        locationCallback = createLocationCallback(userName)
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+        Log.d("StartLocationUpdates", "Запрос обновлений местоположения с интервалом 1 секунда отправлен")
+    }
+
+    // Функция обратного вызова для получения обновлений местоположения
+    private fun createLocationCallback(userName: String): com.google.android.gms.location.LocationCallback {
+        return object : com.google.android.gms.location.LocationCallback() {
+            override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
+                locationResult.lastLocation?.let { location ->
+                    Log.d("LocationCallback", "Новое местоположение: ${location.latitude}, ${location.longitude}")
+
+                    // Обновляем или создаем маркер пользователя на карте
+                    updateMarkerOnMap(location.latitude, location.longitude, userName)
+
+                    // Отправляем данные местоположения в Firestore
+                    sendLocationToFirestore(location.latitude, location.longitude, userName)
+                }
+            }
+        }
+    }
+
+    // Обновление маркера на карте
+    private fun updateMarkerOnMap(latitude: Double, longitude: Double, userName: String) {
+        val geoPoint = GeoPoint(latitude, longitude)
+
+        // Если маркер пользователя уже существует, обновляем его положение
+        if (deviceMarker != null) {
+            deviceMarker?.position = geoPoint
+        } else {
+            // Если маркера еще нет, создаем новый маркер и добавляем на карту
+            deviceMarker = Marker(mapView).apply {
+                position = geoPoint
+                title = userName
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            }
+            mapView.overlays.add(deviceMarker)
+        }
+
+        // Обновляем карту для отображения изменений
+        mapView.invalidate()
+    }
+
+    // Функция отправки данных местоположения в Firestore
+    private fun sendLocationToFirestore(latitude: Double, longitude: Double, userName: String) {
+        if (userName.isBlank() || userName == "Гость") {
+            Log.e("sendLocationToFirestore", "Некорректное имя пользователя. Данные местоположения не отправлены.")
+            return
+        }
+
+        val locationData = hashMapOf(
+            "latitude" to latitude,
+            "longitude" to longitude,
+            "timestamp" to System.currentTimeMillis()
+        )
+
+        db.collection("locations").document(userName).set(locationData)
+            .addOnSuccessListener {
+                Log.d("sendLocationToFirestore", "Данные местоположения успешно отправлены для пользователя $userName")
+            }
+            .addOnFailureListener { e ->
+                Log.e("sendLocationToFirestore", "Ошибка отправки данных местоположения", e)
+            }
+    }
+
+    private fun loadAllLocationsFromFirestore() {
+        Log.d("Firestore", "Загрузка всех актуальных маркеров из Firestore")
+
+        db.collection("locations").addSnapshotListener { snapshots, e ->
+            if (e != null) {
+                Log.w("Firestore", "Ошибка получения данных из Firestore", e)
+                return@addSnapshotListener
+            }
+
+            mapView.overlays.clear()  // Очищаем карту перед добавлением новых маркеров
+
+            // Пересоздаем маркер текущего пользователя, если его местоположение известно
+            deviceMarker?.let { mapView.overlays.add(it) }
+
+            snapshots?.forEach { document ->
+                val latitude = document.getDouble("latitude")
+                val longitude = document.getDouble("longitude")
+                val identifier = document.id // Используем ID документа как идентификатор пользователя или устройства
+
+                if (latitude != null && longitude != null) {
+                    val geoPoint = GeoPoint(latitude, longitude)
+                    Log.d("Firestore", "Найдено местоположение для $identifier: $latitude, $longitude")
+                    addMarkerToMap(geoPoint, identifier) // Передаем идентификатор и координаты
+                }
+            }
+
+            mapView.invalidate()  // Обновляем карту для отображения новых маркеров
+        }
+    }
+
+
+
+    // Функция добавления маркера на карту для конкретного пользователя
+    private fun addMarkerToMap(geoPoint: GeoPoint, identifier: String) {
+        Log.d("addMarkerToMap", "Добавление маркера для: $identifier с координатами: $geoPoint")
+
+        val marker = Marker(mapView).apply {
+            position = geoPoint
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            title = identifier // Устанавливаем в качестве заголовка маркера имя пользователя или устройства
+        }
+        mapView.overlays.add(marker)
+        Log.d("Map", "Маркер добавлен на карту для: $identifier на координатах: ${geoPoint.latitude}, ${geoPoint.longitude}")
+    }
+
+
+    override fun onStop() {
+        super.onStop()
+        Log.d("MainActivity", "onStop вызван")
+
+        // Проверка состояния чекбокса "Показывать местоположение после выхода"
+        val sharedPreferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val showLocationAfterExit = sharedPreferences.getBoolean("show_location_after_exit", false)
+
+        // Удаляем данные только если чекбокс выключен и активность завершается не вручную
+        if (!isFinishingManually && !showLocationAfterExit) {
+            userName?.let {
+                removeUserData(it)
+            }
+        } else {
+            Log.d("MainActivity", "Данные пользователя не удалены: showLocationAfterExit = $showLocationAfterExit")
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        if (isNetworkCallbackRegistered) {
-            connectivityManager.unregisterNetworkCallback(networkCallback)
+        Log.d("MainActivity", "onDestroy вызван")
+
+        // Проверка состояния чекбокса "Показывать местоположение после выхода"
+        val sharedPreferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val showLocationAfterExit = sharedPreferences.getBoolean("show_location_after_exit", false)
+
+        // Удаляем данные только если чекбокс выключен
+        if (!showLocationAfterExit) {
+            userName?.let {
+                removeUserData(it)
+            }
+        } else {
+            Log.d("MainActivity", "Данные пользователя не удалены: showLocationAfterExit = $showLocationAfterExit")
         }
+
+        // Проверяем, был ли зарегистрирован NetworkCallback, перед его отменой
+        if (isNetworkCallbackRegistered) {
+            try {
+                connectivityManager.unregisterNetworkCallback(networkCallback)
+                isNetworkCallbackRegistered = false
+                Log.d("MainActivity", "NetworkCallback успешно отменен в onDestroy")
+            } catch (e: IllegalArgumentException) {
+                Log.e("MainActivity", "Ошибка при отмене NetworkCallback: он не был зарегистрирован", e)
+            }
+        }
+
+        // Остановка обновлений местоположения
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+        Log.d("MainActivity", "Обновления местоположения успешно остановлены")
+    }
+
+    private fun removeUserData(userName: String) {
+        db.collection("locations").document(userName)
+            .delete()
+            .addOnSuccessListener {
+                Log.d("removeUserData", "Данные пользователя '$userName' успешно удалены из Firestore")
+            }
+            .addOnFailureListener { e ->
+                Log.e("removeUserData", "Ошибка при удалении данных пользователя '$userName': $e")
+            }
     }
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
     }
+}
+
+class LocationUpdateService : Service() {
+
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+
+    override fun onCreate() {
+        super.onCreate()
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForegroundNotification()
+        startLocationUpdates()
+        return START_STICKY
+    }
+
+    private fun startForegroundNotification() {
+        val notification = NotificationCompat.Builder(this, "LocationChannel")
+            .setContentTitle("Сервіс оновлення локації")
+            .setContentText("Ваше місцезнаходження оновлюється...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        startForeground(1, notification)
+    }
+
+    private fun startLocationUpdates() {
+        val locationRequest = LocationRequest.create().apply {
+            interval = 2000 // Запит кожні 10 секунд
+            fastestInterval = 1000
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
+
+        if (ActivityCompat.checkSelfPermission(
+                this, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                object : LocationCallback() {
+                    override fun onLocationResult(locationResult: LocationResult) {
+                        locationResult.lastLocation?.let { location ->
+                            val geoPoint = GeoPoint(location.latitude, location.longitude)
+                            sendLocationToServer(geoPoint)
+                        }
+                    }
+                },
+                Looper.getMainLooper()
+            )
+        }
+    }
+
+    private fun sendLocationToServer(geoPoint: GeoPoint) {
+        val db = Firebase.firestore
+        val userName = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            .getString("user_name", "Unknown User") ?: "Unknown User"
+        db.collection("locations").document(userName).set(
+            mapOf(
+                "latitude" to geoPoint.latitude,
+                "longitude" to geoPoint.longitude,
+                "timestamp" to System.currentTimeMillis()
+            )
+        )
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 }
 
 
@@ -437,6 +692,16 @@ fun AppContent_backend(
     var showLocationAfterExit by remember {
         mutableStateOf(preferences.getBoolean("show_location_after_exit", false))
     }
+
+    fun manageLocationService(context: Context, isChecked: Boolean) {
+        val serviceIntent = Intent(context, LocationUpdateService::class.java)
+        if (isChecked) {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } else {
+            context.stopService(serviceIntent)
+        }
+    }
+
 
     // Функція для збереження стану чекбокса
     fun saveShowLocationAfterExitState(isChecked: Boolean) {
