@@ -59,6 +59,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation ("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
+    implementation ("com.google.android.gms:play-services-location:21.0.1")
+
+
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
