@@ -66,8 +66,7 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation ("com.google.firebase:firebase-auth-ktx:22.3.1")
-// Або остання версія
+
     // Firebase BOM для управления версиями
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
     implementation("com.google.firebase:firebase-firestore-ktx")
@@ -82,7 +81,7 @@ dependencies {
     // OSMDroid для работы с картами
     implementation("org.osmdroid:osmdroid-android:6.1.11")
     implementation("org.osmdroid:osmdroid-mapsforge:6.1.11")
-    implementation ("androidx.compose.foundation:foundation:1.6.0") // або остання версія
+
     implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
