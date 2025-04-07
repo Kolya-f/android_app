@@ -1,8 +1,0 @@
-<resources>
-    <!-- Назва додатку -->
-    <string name="app_name">My Application</string>
-
-    <!-- Текст для сповіщення -->
-    <string name="location_notification_title">Відстеження місцезнаходження</string>
-    <string name="location_notification_text">Ваше місцезнаходження оновлюється</string>
-</resources>
