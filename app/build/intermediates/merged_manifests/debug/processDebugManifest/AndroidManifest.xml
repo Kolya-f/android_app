@@ -8,14 +8,14 @@
         android:minSdkVersion="24"
         android:targetSdkVersion="34" />
 
-    <!-- Разрешения для приложения -->
+    <!-- Дозволи для місцезнаходження та сервісів -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
@@ -61,17 +61,17 @@
         android:testOnly="true"
         android:theme="@style/Theme.MyApplication" >
 
-        <!-- Установка пути кеша для OSMDroid -->
+        <!-- Налаштування шляху кешу для OSMDroid -->
         <meta-data
             android:name="osmdroid.storage"
             android:value="osmdroid" />
 
-        <!-- Настройки для Firebase (FCM) -->
+        <!-- Налаштування для Firebase (FCM) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="default_channel" />
 
-        <!-- Главная активность приложения -->
+        <!-- Головна активність додатка -->
         <activity
             android:name="com.example.myapplication.MainActivity"
             android:exported="true"
@@ -84,10 +84,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Сервіс для відстеження місцезнаходження -->
         <service
             android:name="com.example.myapplication.LocationTrackingService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="location" />
         <service
             android:name="com.google.firebase.components.ComponentDiscoveryService"
             android:directBootAware="true"

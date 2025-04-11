@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-53:12
-INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-53:12
-INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-53:12
-INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-53:12
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:1-55:12
 MERGED from [com.google.android.gms:play-services-location:21.3.0] /home/fipokzec/.gradle/caches/8.10/transforms/e3cc1b1b7255516c47ffbbd8e67ac442/transformed/play-services-location-21.3.0/AndroidManifest.xml:2:1-8:12
 MERGED from [androidx.compose.material3:material3-android:1.3.1] /home/fipokzec/.gradle/caches/8.10/transforms/91e0d570db3861317673bc701f2da3fa/transformed/material3-release/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.compose.material:material-android:1.7.5] /home/fipokzec/.gradle/caches/8.10/transforms/1a783a3eac343ea2065a1b4cafdf1a35/transformed/material-release/AndroidManifest.xml:2:1-7:12
@@ -137,9 +137,75 @@ MERGED from [com.google.android.play:core-common:2.0.3] /home/fipokzec/.gradle/c
 		INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml
 	xmlns:android
 		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:2:11-69
+uses-permission#android.permission.INTERNET
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:6:5-67
+MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:23:5-67
+MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:23:5-67
+MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:11:5-67
+MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:11:5-67
+MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:25:5-67
+MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:25:5-67
+MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:23:5-67
+MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:23:5-67
+MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:23:5-67
+MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:23:5-67
+MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:22:5-67
+MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:22:5-67
+MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:8:5-67
+MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:8:5-67
+MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:7:5-67
+MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:7:5-67
+MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:23:5-67
+MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:23:5-67
+	android:name
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:6:22-64
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:7:5-79
+MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:22:5-79
+MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:22:5-79
+MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:10:5-79
+MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:10:5-79
+MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:26:5-79
+MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:26:5-79
+MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:24:5-79
+MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:24:5-79
+MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:24:5-79
+MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:24:5-79
+MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:23:5-79
+MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:23:5-79
+MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:7:5-79
+MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:7:5-79
+MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:8:5-79
+MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:8:5-79
+MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:24:5-79
+MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:24:5-79
+MERGED from [io.grpc:grpc-android:1.62.2] /home/fipokzec/.gradle/caches/8.10/transforms/a297f165e8db0348fc6e16105ee9684f/transformed/grpc-android-1.62.2/AndroidManifest.xml:7:5-79
+MERGED from [io.grpc:grpc-android:1.62.2] /home/fipokzec/.gradle/caches/8.10/transforms/a297f165e8db0348fc6e16105ee9684f/transformed/grpc-android-1.62.2/AndroidManifest.xml:7:5-79
+	android:name
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:7:22-76
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:8:5-79
+	android:name
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:8:22-76
+uses-permission#android.permission.ACCESS_COARSE_LOCATION
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:9:5-81
+	android:name
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:9:22-78
+uses-permission#android.permission.ACCESS_BACKGROUND_LOCATION
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:10:5-85
+	android:name
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:10:22-82
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:11:5-77
+	android:name
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:11:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_LOCATION
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:12:5-86
+	android:name
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:12:22-83
 application
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:5:5-42:19
-INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:5:5-42:19
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:14:5-53:19
+INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:14:5-53:19
 MERGED from [com.google.android.gms:play-services-location:21.3.0] /home/fipokzec/.gradle/caches/8.10/transforms/e3cc1b1b7255516c47ffbbd8e67ac442/transformed/play-services-location-21.3.0/AndroidManifest.xml:6:5-20
 MERGED from [com.google.android.gms:play-services-location:21.3.0] /home/fipokzec/.gradle/caches/8.10/transforms/e3cc1b1b7255516c47ffbbd8e67ac442/transformed/play-services-location-21.3.0/AndroidManifest.xml:6:5-20
 MERGED from [com.google.firebase:firebase-database-ktx:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/be3a3da2df04d5613a8dacbeb09c3fbb/transformed/firebase-database-ktx-21.0.0/AndroidManifest.xml:8:5-16:19
@@ -225,125 +291,65 @@ MERGED from [com.google.android.play:core-common:2.0.3] /home/fipokzec/.gradle/c
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.15.0] /home/fipokzec/.gradle/caches/8.10/transforms/6e5dbbeee5cc7690ae16dc6c70ba996d/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:12:9-35
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:21:9-35
 	android:label
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:10:9-41
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:19:9-41
 	android:fullBackupContent
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:8:9-54
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:17:9-54
 	android:roundIcon
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:11:9-54
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:20:9-54
 	tools:targetApi
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:14:9-29
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:23:9-29
 	android:icon
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:9:9-43
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:18:9-43
 	android:allowBackup
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:6:9-35
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:15:9-35
 	android:theme
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:13:9-51
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:22:9-51
 	android:dataExtractionRules
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:7:9-65
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:16:9-65
 meta-data#osmdroid.storage
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:17:9-19:40
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:26:9-28:40
 	android:value
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:19:13-37
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:28:13-37
 	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:18:13-44
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:27:13-44
 meta-data#com.google.firebase.messaging.default_notification_channel_id
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:22:9-24:47
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:31:9-33:47
 	android:value
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:24:13-44
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:33:13-44
 	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:23:13-89
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:32:13-89
 activity#com.example.myapplication.MainActivity
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:27:9-36:20
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:36:9-45:20
 	android:label
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:30:13-45
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:39:13-45
 	android:exported
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:29:13-36
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:38:13-36
 	android:theme
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:31:13-55
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:40:13-55
 	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:28:13-66
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:37:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:32:13-35:29
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:41:13-44:29
 action#android.intent.action.MAIN
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:33:17-69
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:42:17-69
 	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:33:25-66
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:42:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:34:17-77
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:43:17-77
 	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:34:27-74
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:43:27-74
 service#com.example.myapplication.LocationTrackingService
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:38:9-41:40
+ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:48:9-52:56
 	android:enabled
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:40:13-35
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:50:13-35
 	android:exported
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:41:13-37
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:51:13-37
+	android:foregroundServiceType
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:52:13-53
 	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:39:13-52
-uses-permission#android.permission.INTERNET
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:45:5-67
-MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:23:5-67
-MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:23:5-67
-MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:11:5-67
-MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:11:5-67
-MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:25:5-67
-MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:25:5-67
-MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:23:5-67
-MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:23:5-67
-MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:23:5-67
-MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:23:5-67
-MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:22:5-67
-MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:22:5-67
-MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:8:5-67
-MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:8:5-67
-MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:7:5-67
-MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:7:5-67
-MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:23:5-67
-MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:23:5-67
-	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:45:22-64
-uses-permission#android.permission.ACCESS_FINE_LOCATION
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:46:5-79
-	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:46:22-76
-uses-permission#android.permission.ACCESS_COARSE_LOCATION
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:47:5-81
-	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:47:22-78
-uses-permission#android.permission.ACCESS_NETWORK_STATE
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:48:5-79
-MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:22:5-79
-MERGED from [com.google.firebase:firebase-database:21.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/350149a7f386e536f1755cd8946a85fa/transformed/firebase-database-21.0.0/AndroidManifest.xml:22:5-79
-MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:10:5-79
-MERGED from [com.google.firebase:firebase-firestore:25.1.1] /home/fipokzec/.gradle/caches/8.10/transforms/e9a427d8ca7bf6940417401daf68d1dc/transformed/firebase-firestore-25.1.1/AndroidManifest.xml:10:5-79
-MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:26:5-79
-MERGED from [com.google.firebase:firebase-auth:23.1.0] /home/fipokzec/.gradle/caches/8.10/transforms/01186651547f593a0ede4fb0ebe1e662/transformed/firebase-auth-23.1.0/AndroidManifest.xml:26:5-79
-MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:24:5-79
-MERGED from [com.google.android.gms:play-services-measurement:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/689e4b3d3a663ae2238c6bb781cb0e88/transformed/play-services-measurement-22.1.2/AndroidManifest.xml:24:5-79
-MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:24:5-79
-MERGED from [com.google.android.gms:play-services-measurement-impl:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/ccc27a7fe344fc11142819b8eb408478/transformed/play-services-measurement-impl-22.1.2/AndroidManifest.xml:24:5-79
-MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:23:5-79
-MERGED from [com.google.android.gms:play-services-measurement-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/e7b11f7c1b6a56c9346bbe1e7b1e4af9/transformed/play-services-measurement-api-22.1.2/AndroidManifest.xml:23:5-79
-MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:7:5-79
-MERGED from [com.google.firebase:firebase-installations:18.0.0] /home/fipokzec/.gradle/caches/8.10/transforms/10662b8dd21384fdd74504136360809c/transformed/firebase-installations-18.0.0/AndroidManifest.xml:7:5-79
-MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:8:5-79
-MERGED from [com.google.android.recaptcha:recaptcha:18.5.1] /home/fipokzec/.gradle/caches/8.10/transforms/14b75a2ae5a96dcb6cad2ac0328fb8e7/transformed/recaptcha-18.5.1/AndroidManifest.xml:8:5-79
-MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:24:5-79
-MERGED from [com.google.android.gms:play-services-measurement-sdk-api:22.1.2] /home/fipokzec/.gradle/caches/8.10/transforms/21f483234db95ae13cab028414043e1e/transformed/play-services-measurement-sdk-api-22.1.2/AndroidManifest.xml:24:5-79
-MERGED from [io.grpc:grpc-android:1.62.2] /home/fipokzec/.gradle/caches/8.10/transforms/a297f165e8db0348fc6e16105ee9684f/transformed/grpc-android-1.62.2/AndroidManifest.xml:7:5-79
-MERGED from [io.grpc:grpc-android:1.62.2] /home/fipokzec/.gradle/caches/8.10/transforms/a297f165e8db0348fc6e16105ee9684f/transformed/grpc-android-1.62.2/AndroidManifest.xml:7:5-79
-	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:48:22-76
-uses-permission#android.permission.ACCESS_BACKGROUND_LOCATION
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:49:5-85
-	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:49:22-82
-uses-permission#android.permission.FOREGROUND_SERVICE
-ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:50:5-77
-	android:name
-		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:50:22-74
+		ADDED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml:49:13-52
 uses-sdk
 INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /home/fipokzec/StudioProjects/android_app/app/src/main/AndroidManifest.xml
