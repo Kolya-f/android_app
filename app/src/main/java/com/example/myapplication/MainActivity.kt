@@ -220,6 +220,16 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    override fun onPause() {
+        super.onPause()
+        Log.d("MainActivity", "onPause called")
+
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("keep_tracking", false)) {
+            LocationTrackingService.startService(this)
+        }
+    }
+
 
     // Обновление маркера на карте
     private fun updateMarkerOnMap(latitude: Double, longitude: Double, userName: String) {
@@ -307,65 +317,44 @@ class MainActivity : ComponentActivity() {
         Log.d("Map", "Маркер добавлен на карту для: $identifier на координатах: ${geoPoint.latitude}, ${geoPoint.longitude}")
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.d("MainActivity", "onDestroy вызван, проверяем настройки отслеживания")
-
+    override fun onStop() {
+        super.onStop()
         val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val shouldKeepTracking = prefs.getBoolean("keep_tracking", false)
-
-        if (!shouldKeepTracking) {
-            userName?.let {
-                Log.d("MainActivity", "Удаляем данные пользователя $it")
-                removeUserData(it)
-            }
-            fusedLocationClient.removeLocationUpdates(locationCallback)
-            Log.d("MainActivity", "Обновления местоположения остановлены")
-        } else {
-            Log.d("MainActivity", "Режим продолжения отслеживания активирован, данные не удаляются")
-
-            // Запускаем сервис для фонового отслеживания
-            val serviceIntent = Intent(this, LocationTrackingService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
-        }
-
-        if (isNetworkCallbackRegistered) {
-            try {
-                connectivityManager.unregisterNetworkCallback(networkCallback)
-                isNetworkCallbackRegistered = false
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Помилка відписки від мережі", e)
-            }
+        if (prefs.getBoolean("keep_tracking", false) && !isFinishing) {
+            LocationTrackingService.startService(this)
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        Log.d("MainActivity", "onStop вызван")
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d("MainActivity", "onDestroy called")
 
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val shouldKeepTracking = prefs.getBoolean("keep_tracking", false)
+        // Зупиняємо сервіс при повному закритті
+        stopService(Intent(this, LocationTrackingService::class.java))
 
-        if (!shouldKeepTracking) {
-            userName?.let {
-                removeUserData(it)
-            }
+        // Видаляємо дані
+        removeUserData(userName)
+
+        // Зупиняємо оновлення локації
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error stopping location updates", e)
         }
     }
 
     private fun removeUserData(userName: String) {
-        db.collection("locations").document(userName)
-            .delete()
-            .addOnSuccessListener {
-                Log.d("removeUserData", "Данные пользователя '$userName' успешно удалены из Firestore")
-            }
-            .addOnFailureListener { e ->
-                Log.e("removeUserData", "Ошибка при удалении данных пользователя '$userName': $e")
-            }
+        if (userName.isNotBlank() && userName != "Гость") {
+            Firebase.firestore.collection("locations").document(userName)
+                .delete()
+                .addOnSuccessListener {
+                    Log.d("MainActivity", "User data removed")
+                }
+        }
+    }
+    override fun onBackPressed() {
+        isFinishingManually = true
+        super.onBackPressed()
     }
 
     companion object {
@@ -652,14 +641,16 @@ fun AppContent_backend(
             ) {
                 Checkbox(
                     checked = keepTracking,
-                    onCheckedChange = { keepTracking = it },
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = Color(0xFF4CAF50),
-                        uncheckedColor = MaterialTheme.colorScheme.onSurface
-                    )
+                    onCheckedChange = { isChecked ->
+                        keepTracking = isChecked
+                        prefs.edit().putBoolean("keep_tracking", isChecked).apply()
+                        if (!isChecked) {
+                            context.stopService(Intent(context, LocationTrackingService::class.java))
+                        }
+                    }
                 )
                 Text(
-                    text = "Продолжать обновлять мое местоположение после выхода",
+                    text = "Продовжувати відстежувати у фоновому режимі",
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }

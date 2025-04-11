@@ -1,54 +1,107 @@
 package com.example.myapplication
 
-import android.Manifest
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import android.os.IBinder
-import android.os.Looper
+import android.os.*
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
+import com.google.android.gms.location.*
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
 class LocationTrackingService : Service() {
-
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    private val db = Firebase.firestore
     private var userName = "Гость"
     private val notificationId = 1
     private val channelId = "location_channel"
 
     override fun onCreate() {
         super.onCreate()
+        Log.d("LocationService", "Service created")
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        userName = prefs.getString("user_name", "Гость") ?: "Гость"
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("LocationService", "Service started")
+
         val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("keep_tracking", false)) {
+        userName = prefs.getString("user_name", "Гость") ?: "Гость"
+        val keepTracking = prefs.getBoolean("keep_tracking", false)
+
+        if (!keepTracking || userName.isBlank() || userName == "Гость") {
             stopSelf()
             return START_NOT_STICKY
         }
 
         startForeground(notificationId, createNotification())
-        startTracking()
+        startLocationUpdates()
+
         return START_STICKY
+    }
+
+    private fun startLocationUpdates() {
+        val locationRequest = LocationRequest.Builder(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            5000
+        ).setMinUpdateIntervalMillis(3000).build()
+
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                locationResult.lastLocation?.let { location ->
+                    Log.d("LocationService", "Updating location for $userName")
+                    db.collection("locations").document(userName).set(mapOf(
+                        "latitude" to location.latitude,
+                        "longitude" to location.longitude,
+                        "timestamp" to System.currentTimeMillis()
+                    ))
+                }
+            }
+        }
+
+        try {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper()
+            )
+            Log.d("LocationService", "Location updates started")
+        } catch (e: SecurityException) {
+            Log.e("LocationService", "Location permission error", e)
+            stopSelf()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d("LocationService", "Service destroyed")
+
+        stopLocationUpdates()
+        removeUserData()
+    }
+
+    private fun stopLocationUpdates() {
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+            Log.d("LocationService", "Location updates stopped")
+        } catch (e: Exception) {
+            Log.e("LocationService", "Error stopping updates", e)
+        }
+    }
+
+    private fun removeUserData() {
+        if (userName.isNotBlank() && userName != "Гость") {
+            db.collection("locations").document(userName).delete()
+                .addOnSuccessListener {
+                    Log.d("LocationService", "User data removed")
+                }
+                .addOnFailureListener { e ->
+                    Log.e("LocationService", "Error removing user data", e)
+                }
+        }
     }
 
     private fun createNotificationChannel() {
@@ -58,69 +111,31 @@ class LocationTrackingService : Service() {
                 "Location Tracking",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Background location tracking"
+                description = "Tracking your location"
             }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(channel)
         }
     }
 
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Відстеження місцезнаходження")
-            .setContentText("Активне оновлення позиції")
+            .setContentTitle("Відстеження позиції")
+            .setContentText("Оновлення для $userName")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
-    private fun startTracking() {
-        val locationRequest = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY,
-            5000
-        ).apply {
-            setMinUpdateIntervalMillis(3000)
-        }.build()
-
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                locationResult.lastLocation?.let { location ->
-                    Firebase.firestore.collection("locations").document(userName)
-                        .set(mapOf(
-                            "latitude" to location.latitude,
-                            "longitude" to location.longitude,
-                            "timestamp" to System.currentTimeMillis()
-                        ))
-                }
-            }
-        }
-
-        if (checkPermission()) {
-            try {
-                fusedLocationClient.requestLocationUpdates(
-                    locationRequest,
-                    locationCallback,
-                    Looper.getMainLooper()
-                )
-            } catch (e: SecurityException) {
-                Log.e("LocationService", "Permission error", e)
-            }
-        }
-    }
-
-    private fun checkPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onDestroy() {
-        super.onDestroy()
-        try {
-            fusedLocationClient.removeLocationUpdates(locationCallback)
-        } catch (e: Exception) {
-            Log.e("LocationService", "Error stopping updates", e)
+    companion object {
+        fun startService(context: Context) {
+            val intent = Intent(context, LocationTrackingService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
     }
 }
