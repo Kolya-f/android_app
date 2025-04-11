@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Дозволи для місцезнаходження та сервісів -->
+    <!-- Дозволи -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="33" />
 
     <application
         android:allowBackup="true"
@@ -22,21 +26,24 @@
         android:theme="@style/Theme.MyApplication"
         tools:targetApi="34">
 
-        <!-- Налаштування шляху кешу для OSMDroid -->
+        <!-- Налаштування OSMDroid -->
         <meta-data
-            android:name="osmdroid.storage"
-            android:value="osmdroid" />
-
-        <!-- Налаштування для Firebase (FCM) -->
+            android:name="osmdroid.basePath"
+            android:value="/storage/emulated/0/osmdroid" />
         <meta-data
-            android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="default_channel" />
+            android:name="osmdroid.tileDownloadThreads"
+            android:value="2" />
+        <meta-data
+            android:name="osmdroid.tileDownloadMaxQueueSize"
+            android:value="10" />
 
-        <!-- Головна активність додатка -->
+        <!-- Головна активність -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:screenOrientation="fullSensor"
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -44,12 +51,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Сервіс для відстеження місцезнаходження -->
+        <!-- Сервіс відстеження місцезнаходження -->
         <service
             android:name=".LocationTrackingService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
     </application>
-
 </manifest>

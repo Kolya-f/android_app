@@ -1,6 +1,8 @@
 package com.example.myapplication
 
-
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.border
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.ktx.firestore
 import androidx.compose.ui.viewinterop.AndroidView
@@ -15,8 +17,6 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
@@ -62,8 +62,16 @@ import com.google.firebase.FirebaseApp
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import android.content.SharedPreferences
 import android.location.LocationManager
-import android.os.Build
-
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.draw.rotate
+import android.view.MotionEvent
+import kotlin.math.atan2
+import android.view.ViewConfiguration
+import kotlin.math.abs
 
 val LightBlue = Color(0xFFADD8E6)
 
@@ -220,16 +228,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    override fun onPause() {
-        super.onPause()
-        Log.d("MainActivity", "onPause called")
-
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        if (prefs.getBoolean("keep_tracking", false)) {
-            LocationTrackingService.startService(this)
-        }
-    }
-
 
     // Обновление маркера на карте
     private fun updateMarkerOnMap(latitude: Double, longitude: Double, userName: String) {
@@ -327,20 +325,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("MainActivity", "onDestroy called")
-
-        // Зупиняємо сервіс при повному закритті
-        stopService(Intent(this, LocationTrackingService::class.java))
-
-        // Видаляємо дані
+        // Видаляємо дані при повному закритті
         removeUserData(userName)
-
-        // Зупиняємо оновлення локації
-        try {
-            fusedLocationClient.removeLocationUpdates(locationCallback)
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error stopping location updates", e)
-        }
+        // Зупиняємо сервіс
+        stopService(Intent(this, LocationTrackingService::class.java))
     }
 
     private fun removeUserData(userName: String) {
@@ -348,7 +336,7 @@ class MainActivity : ComponentActivity() {
             Firebase.firestore.collection("locations").document(userName)
                 .delete()
                 .addOnSuccessListener {
-                    Log.d("MainActivity", "User data removed")
+                    Log.d("MainActivity", "Дані видалено")
                 }
         }
     }
@@ -442,63 +430,174 @@ private fun addOrUpdateDeviceMarker(mapView: MapView, geoPoint: GeoPoint, device
 @Composable
 fun MapScreen_Backend(
     modifier: Modifier = Modifier,
-    userLocation: GeoPoint?,
-
-    ) {
-
-    // Управление маркерами других устройств
-    val deviceMarkers = mutableMapOf<String, Marker>()
+    userLocation: GeoPoint?
+) {
+    val deviceMarkers = remember { mutableMapOf<String, Marker>() }
+    var currentRotation by remember { mutableStateOf(0f) }
+    var initialAngle by remember { mutableStateOf(0f) }
+    var isRotating by remember { mutableStateOf(false) }
+    var touchSlop by remember { mutableStateOf(0f) }
 
     AndroidView(
         factory = { context ->
             MapView(context).apply {
                 controller.setZoom(15.0)
                 setMultiTouchControls(true)
+                isHorizontalMapRepetitionEnabled = true
+                isVerticalMapRepetitionEnabled = true
+
+                // Отримуємо системний поріг для визначення початку жесту
+                touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+
+                setOnTouchListener { v, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_POINTER_DOWN -> {
+                            if (event.pointerCount == 2) {
+                                initialAngle = getRotationAngle(event)
+                                isRotating = false // Очікуємо достатнього зсуву
+                            }
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            if (event.pointerCount == 2) {
+                                val newAngle = getRotationAngle(event)
+                                val delta = newAngle - initialAngle
+
+                                // Перевіряємо, чи рух досить великий для початку обертання
+                                if (!isRotating && abs(delta) > 3f) { // 3 градуси - поріг активації
+                                    isRotating = true
+                                }
+
+                                if (isRotating) {
+                                    // Точні параметри як у Google Maps
+                                    currentRotation = (currentRotation + delta * 0.6f) % 360f
+                                    initialAngle = newAngle
+                                    mapOrientation = currentRotation
+                                    invalidate()
+                                }
+                            }
+                        }
+                        MotionEvent.ACTION_POINTER_UP,
+                        MotionEvent.ACTION_UP -> {
+                            isRotating = false
+                        }
+                    }
+                    false
+                }
 
                 post {
-                    // Инициализируем маркер пользователя
                     userLocation?.let { geoPoint ->
                         controller.setCenter(geoPoint)
-
                     }
 
-                    // Слушатель для загрузки и обновления маркеров других пользователей
-                    val db = Firebase.firestore
-                    db.collection("locations")
+                    Firebase.firestore.collection("locations")
                         .addSnapshotListener { snapshots, error ->
-                            if (error != null) {
-                                Log.e("MapScreen_Backend", "Ошибка загрузки данных из Firestore: ${error.message}")
-                                return@addSnapshotListener
-                            }
+                            if (error != null) return@addSnapshotListener
 
-                            // Удаляем старые маркеры устройств и добавляем новые
-                            deviceMarkers.values.forEach { marker -> overlays.remove(marker) }
+                            overlays.removeAll { it is Marker }
                             deviceMarkers.clear()
 
                             snapshots?.forEach { document ->
-                                val latitude = document.getDouble("latitude")
-                                val longitude = document.getDouble("longitude")
-                                val deviceName = document.id
-
-                                if (latitude != null && longitude != null) {
-                                    val geoPoint = GeoPoint(latitude, longitude)
-                                    val marker = addOrUpdateDeviceMarker(this, geoPoint, deviceName)
-                                    deviceMarkers[deviceName] = marker
+                                document.getDouble("latitude")?.let { lat ->
+                                    document.getDouble("longitude")?.let { lon ->
+                                        val marker = Marker(this).apply {
+                                            position = GeoPoint(lat, lon)
+                                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                            title = document.id
+                                        }
+                                        overlays.add(marker)
+                                        deviceMarkers[document.id] = marker
+                                    }
                                 }
                             }
-                            invalidate() // Обновляем карту
+                            invalidate()
                         }
                 }
             }
         },
         modifier = modifier.fillMaxSize(),
         update = { mapView ->
+            mapView.mapOrientation = currentRotation
             userLocation?.let {
                 mapView.invalidate()
             }
         }
     )
 }
+
+private fun getRotationAngle(event: MotionEvent): Float {
+    val x1 = event.getX(0)
+    val y1 = event.getY(0)
+    val x2 = event.getX(1)
+    val y2 = event.getY(1)
+    return Math.toDegrees(atan2((y2 - y1).toDouble(), (x2 - x1).toDouble())).toFloat()
+}
+
+
+@Composable
+private fun RotationControls(
+    currentRotation: Float,
+    onRotationChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showReset by remember { mutableStateOf(currentRotation != 0f) }
+
+    Column(
+        modifier = modifier.width(48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Кнопка повороту за годинниковою стрілкою
+        IconButton(
+            onClick = {
+                onRotationChange((currentRotation + 30f) % 360f) // Поворот на 30°
+                showReset = true
+            },
+            modifier = Modifier
+                .size(48.dp)
+                .background(MaterialTheme.colorScheme.surface, CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+        ) {
+
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Кнопка скидання (з'являється тільки при обертанні)
+        AnimatedVisibility(visible = showReset) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(
+                    onClick = {
+                        onRotationChange(0f)
+                        showReset = false
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                ) {
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        // Кнопка повороту проти годинникової стрілки
+        IconButton(
+            onClick = {
+                onRotationChange((currentRotation - 30f + 360f) % 360f) // Поворот на 30°
+                showReset = true
+            },
+            modifier = Modifier
+                .size(48.dp)
+                .background(MaterialTheme.colorScheme.surface, CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+        ) {
+
+        }
+    }
+}
+
+
+
+
 
 @Composable
 fun NicknameDialog(
@@ -641,16 +740,14 @@ fun AppContent_backend(
             ) {
                 Checkbox(
                     checked = keepTracking,
-                    onCheckedChange = { isChecked ->
-                        keepTracking = isChecked
-                        prefs.edit().putBoolean("keep_tracking", isChecked).apply()
-                        if (!isChecked) {
-                            context.stopService(Intent(context, LocationTrackingService::class.java))
-                        }
-                    }
+                    onCheckedChange = { keepTracking = it },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Color(0xFF4CAF50),
+                        uncheckedColor = MaterialTheme.colorScheme.onSurface
+                    )
                 )
                 Text(
-                    text = "Продовжувати відстежувати у фоновому режимі",
+                    text = "Продолжать обновлять мое местоположение после выхода",
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
