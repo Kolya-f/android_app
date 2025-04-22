@@ -62,7 +62,14 @@ dependencies {
     implementation ("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation ("com.google.android.gms:play-services-location:21.0.1")
 
+    implementation ("androidx.compose.animation:animation:1.7.8")  // Для анімацій
+    implementation ("androidx.compose.foundation:foundation:1.6.0")
+    implementation ("androidx.compose.material3:material3:1.2.0")
 
+    implementation ("androidx.compose.animation:animation:1.6.0")
+    implementation ("androidx.compose.foundation:foundation:1.6.0")
+    implementation ("androidx.compose.material3:material3:1.2.0")
+    implementation ("androidx.compose.ui:ui:1.6.0")
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")

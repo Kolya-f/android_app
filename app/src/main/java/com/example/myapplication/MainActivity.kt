@@ -72,6 +72,83 @@ import android.view.MotionEvent
 import kotlin.math.atan2
 import android.view.ViewConfiguration
 import kotlin.math.abs
+import androidx.compose.animation.core.animateFloatAsState
+//import androidx.compose.animation.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+
+
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
+
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
+
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.delay
+import kotlin.random.Random
+
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+
+import androidx.compose.foundation.gestures.detectTapGestures
+
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 
 val LightBlue = Color(0xFFADD8E6)
 
@@ -596,41 +673,229 @@ private fun RotationControls(
 }
 
 
-
-
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NicknameDialog(
     currentName: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var nickname by remember { mutableStateOf(currentName) } // Используем текущее имя как начальное значение
+    var nickname by remember { mutableStateOf(currentName) }
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val isError = remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = { onDismiss() },
-        title = { Text(text = "Введите ваше имя") },
-        text = {
-            TextField(
-                value = nickname,
-                onValueChange = { nickname = it },
-                label = { Text("Имя") },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(nickname) }) {
-                Text("OK")
-            }
-        },
-        dismissButton = {
-            Button(onClick = { onDismiss() }) {
-                Text("Отмена")
+    // Анімація тіні (пульсація)
+    val infiniteTransition = rememberInfiniteTransition()
+    val shadowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    // Динамічний градієнт (змінюється при введенні тексту)
+    val dynamicGradient = remember(nickname.length) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF6A11CB).copy(alpha = 0.8f),
+                Color(0xFF2575FC).copy(alpha = 0.8f),
+                if (nickname.isNotEmpty()) Color(0xFF00C9FF) else Color(0xFFF27121)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(1000f, 1000f)
+        )
+    }
+
+    // Випадковий акцентний колір (опціонально)
+    val randomAccentColor = remember {
+        Color(
+            red = Random.nextFloat(),
+            green = Random.nextFloat(),
+            blue = Random.nextFloat()
+        ).copy(alpha = 0.7f)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+    ) {
+        Surface(
+            modifier = Modifier
+                .shadow(
+                    elevation = 16.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    spotColor = Color(0xFF2575FC).copy(alpha = shadowAlpha)
+                )
+                .clip(RoundedCornerShape(24.dp))
+                .pointerInput(Unit) {
+                    detectTapGestures { focusManager.clearFocus() }
+                },
+            color = Color(0xFF121212).copy(alpha = 0.95f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1E1E1E),
+                                Color(0xFF2A2A2A)
+                            )
+                        )
+                    )
+                    .padding(24.dp)
+            ) {
+                Text(
+                    text = "Введіть ваше ім'я",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        color = Color.White,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .drawWithCache {
+                            val gradient = Brush.horizontalGradient(
+                                colors = listOf(
+                                    if (isError.value) Color(0xFFFF6B6B) else Color.Transparent,
+                                    if (nickname.isNotEmpty()) Color(0xFF00C9FF) else Color(0xFFF27121)
+                                )
+                            )
+                            onDrawBehind {
+                                drawRect(gradient)
+                            }
+                        }
+                        .border(
+                            width = 1.dp,
+                            brush = dynamicGradient,
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    BasicTextField(
+                        value = nickname,
+                        onValueChange = {
+                            nickname = it
+                            isError.value = it.isEmpty()
+                        },
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 18.sp
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (nickname.isNotEmpty()) {
+                                    onConfirm(nickname)
+                                } else {
+                                    isError.value = true
+                                }
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .focusRequester(focusRequester)
+                    )
+                }
+
+                if (isError.value) {
+                    Text(
+                        text = "Ім'я не може бути пустим",
+                        color = Color(0xFFFF6B6B),
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    // Кнопка "Скасувати" (з ефектом хвилі)
+                    Button(
+                        onClick = {
+                            focusManager.clearFocus()
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = Color(0xFFFF5555)
+                        ),
+                        modifier = Modifier
+                            .height(40.dp)
+                            .border(
+                                width = 1.dp,
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF5555).copy(alpha = 0.3f),
+                                        Color(0xFFFF5555).copy(alpha = 0.7f)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                    ) {
+                        Text("Скасувати")
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // Кнопка "Підтвердити" (динамічна підсвітка)
+                    Button(
+                        onClick = {
+                            if (nickname.isNotEmpty()) {
+                                focusManager.clearFocus()
+                                onConfirm(nickname)
+                            } else {
+                                isError.value = true
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = if (nickname.isNotEmpty()) Color(0xFF00E676) else randomAccentColor
+                        ),
+                        modifier = Modifier
+                            .height(40.dp)
+                            .border(
+                                width = 1.dp,
+                                brush = if (nickname.isNotEmpty()) {
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF00E676).copy(alpha = 0.3f),
+                                            Color(0xFF00C853).copy(alpha = 0.7f)
+                                        )
+                                    )
+                                } else {
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            randomAccentColor.copy(alpha = 0.3f),
+                                            randomAccentColor.copy(alpha = 0.7f)
+                                        )
+                                    )
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                    ) {
+                        Text("Підтвердити")
+                    }
+                }
             }
         }
-    )
+    }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppContent_backend(
     modifier: Modifier = Modifier,
@@ -641,6 +906,26 @@ fun AppContent_backend(
     var showMap by remember { mutableStateOf(false) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
     val context = LocalContext.current
+
+    // Анімаційні ефекти
+    val infiniteTransition = rememberInfiniteTransition()
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    // Динамічні кольори
+    val dynamicColors = remember {
+        listOf(
+            Color(0xFF6A11CB),
+            Color(0xFF2575FC),
+            Color(0xFF00C9FF)
+        )
+    }
 
     val preferences = remember {
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -656,16 +941,17 @@ fun AppContent_backend(
             ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(context)
         )
     }
-    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
 
-    LaunchedEffect(keepTracking) {
-        prefs.edit().putBoolean("keep_tracking", keepTracking).apply()
-        if (keepTracking) {
-            Toast.makeText(context, "Фонове відстеження увімкнено", Toast.LENGTH_SHORT).show()
-        }
-    }
+    // Фоновий градієнт
+    val backgroundGradient = Brush.verticalGradient(
+        colors = listOf(
+            Color(0xFF121212),
+            Color(0xFF1E1E1E),
+            Color(0xFF2A2A2A)
+        )
+    )
 
-    DisposableEffect(context) {
+    DisposableEffect(Unit) {
         val locationStatusReceiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 isLocationEnabled = ActivityCompat.checkSelfPermission(
@@ -673,20 +959,14 @@ fun AppContent_backend(
                 ) == PackageManager.PERMISSION_GRANTED && isLocationServiceEnabled(ctx)
             }
         }
-        context.applicationContext.registerReceiver(
-            locationStatusReceiver,
-            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
-        )
+        context.registerReceiver(locationStatusReceiver, IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION))
         onDispose {
-            context.applicationContext.unregisterReceiver(locationStatusReceiver)
+            context.unregisterReceiver(locationStatusReceiver)
         }
     }
 
     fun saveUserName(name: String) {
-        preferences.edit().apply {
-            putString("user_name", name)
-            apply()
-        }
+        preferences.edit().putString("user_name", name).apply()
         userName = name
         onUserNameChange(name)
     }
@@ -700,7 +980,7 @@ fun AppContent_backend(
                 showMap = true
             }
         } else {
-            Toast.makeText(context, "Пожалуйста, введите ваше имя", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Будь ласка, введіть ваше ім'я", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -715,50 +995,190 @@ fun AppContent_backend(
         )
     }
 
-    if (showMap && userLocation != null) {
-        MapScreen_Backend(modifier, userLocation)
-    } else {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            TextField(
-                value = userName,
-                onValueChange = { userName = it },
-                label = { Text("Введите ваше имя") },
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(backgroundGradient)
+    ) {
+        if (showMap && userLocation != null) {
+            MapScreen_Backend(Modifier.fillMaxSize(), userLocation)
+        } else {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 8.dp)
+                    .fillMaxSize()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Checkbox(
-                    checked = keepTracking,
-                    onCheckedChange = { keepTracking = it },
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = Color(0xFF4CAF50),
-                        uncheckedColor = MaterialTheme.colorScheme.onSurface
-                    )
-                )
+                // Анімований заголовок
                 Text(
-                    text = "Продолжать обновлять мое местоположение после выхода",
-                    modifier = Modifier.padding(start = 8.dp)
+                    text = "Локаційний трекер",
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    ),
+                    modifier = Modifier.padding(bottom = 32.dp)
                 )
-            }
 
-            ButtonInterface(
-                onButtonClick = onButtonClick,
-                isLocationEnabled = isLocationEnabled,
-                isInternetEnabled = isInternetEnabled,
-                modifier = modifier
-            )
+                // Поле введення з ефектом
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            spotColor = dynamicColors[1].copy(alpha = pulseAlpha)
+                        )
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.horizontalGradient(dynamicColors),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .background(Color(0x20FFFFFF))
+                ) {
+                    TextField(
+                        value = userName,
+                        onValueChange = { userName = it },
+                        label = {
+                            Text(
+                                "Ваше ім'я",
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        },
+                        textStyle = TextStyle(color = Color.White),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Перемикач з анімацією
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x15FFFFFF))
+                        .padding(12.dp)
+                ) {
+                    Switch(
+                        checked = keepTracking,
+                        onCheckedChange = { keepTracking = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = dynamicColors[1],
+                            checkedTrackColor = dynamicColors[1].copy(alpha = 0.5f),
+                            uncheckedThumbColor = Color(0xFFB0B0B0),
+                            uncheckedTrackColor = Color(0xFF505050)
+                        ),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Продовжувати оновлювати моє місцезнаходження",
+                        color = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Кнопка з ефектом хвилі
+                Button(
+                    onClick = onButtonClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            spotColor = dynamicColors[1].copy(alpha = 0.5f)
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.horizontalGradient(dynamicColors),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = "ПОЧАТИ ВІДСТЕЖУВАННЯ",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        )
+                    }
+                }
+
+                // Індикатори стану
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatusIndicator(
+                        isActive = isLocationEnabled,
+                        text = "Місцезнаходження",
+                        activeColor = dynamicColors[1]
+                    )
+                    StatusIndicator(
+                        isActive = isInternetEnabled,
+                        text = "Інтернет",
+                        activeColor = dynamicColors[2]
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun StatusIndicator(
+    isActive: Boolean,
+    text: String,
+    activeColor: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .clip(CircleShape)
+                .background(if (isActive) activeColor else Color(0xFFFF6B6B))
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.3f),
+                    shape = CircleShape
+                )
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = 0.8f),
+            fontSize = 12.sp
+        )
     }
 }
 
